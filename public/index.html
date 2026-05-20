@@ -1731,7 +1731,10 @@
         body: form
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Erro ao gerar a figurinha.');
+      if (!response.ok) {
+        const code = payload.code ? ` (${payload.code})` : '';
+        throw new Error(`${payload.error || 'Erro ao gerar a figurinha.'}${code}`);
+      }
       return payload;
     }
 

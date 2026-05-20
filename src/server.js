@@ -23,6 +23,7 @@ const runtimeDir = isVercel ? path.join('/tmp', 'figurinha-copa') : outputDir;
 const mockupPath = path.join(publicDir, 'figurinha-brasil.jpg');
 const shirtReferencePath = path.join(publicDir, 'brasil-camisa.jpg');
 const jobs = new Map();
+const isProduction = process.env.NODE_ENV === 'production';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -66,6 +67,16 @@ app.get('/health', (_req, res) => {
     ok: true,
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     openaiGenerationEnabled: process.env.OPENAI_GENERATION_ENABLED === 'true',
+    openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
+    openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
+    assets: {
+      mockup: fs.existsSync(mockupPath),
+      shirtReference: fs.existsSync(shirtReferencePath)
+    },
+    runtime: {
+      vercel: isVercel,
+      node: process.version
+    },
     time: new Date().toISOString()
   });
 });
@@ -124,10 +135,13 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     jobs.set(id, job);
     res.status(201).json(job);
   } catch (error) {
-    console.error(error);
+    const normalized = normalizeError(error);
+    console.error('Sticker generation failed:', normalized);
     res.status(500).json({
       error: 'Nao foi possivel gerar a figurinha agora.',
-      detail: process.env.NODE_ENV === 'development' ? error.message : undefined
+      code: normalized.code,
+      requestId: normalized.requestId,
+      detail: isProduction ? undefined : normalized.message
     });
   }
 });
@@ -153,6 +167,8 @@ function normalizePayload(body) {
 async function generatePlayerImage(originalPath, outputPath, data) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
   if (!canUseOpenAI) return originalPath;
+  await assertReadable(originalPath, 'SOURCE_IMAGE_MISSING');
+  await assertReadable(shirtReferencePath, 'SHIRT_REFERENCE_MISSING');
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const prompt = [
@@ -185,6 +201,8 @@ async function generatePlayerImage(originalPath, outputPath, data) {
 }
 
 async function composeSticker({ id, data, playerPath }) {
+  await assertReadable(mockupPath, 'MOCKUP_MISSING');
+  await assertReadable(playerPath, 'PLAYER_IMAGE_MISSING');
   const poster = await sharp(mockupPath).metadata();
   const width = poster.width || 735;
   const height = poster.height || 956;
@@ -309,6 +327,33 @@ function box(width, height, ratio) {
     top: Math.round(height * ratio.top),
     width: Math.round(width * ratio.width),
     height: Math.round(height * ratio.height)
+  };
+}
+
+async function assertReadable(filePath, code) {
+  try {
+    await fsp.access(filePath, fs.constants.R_OK);
+  } catch {
+    const error = new Error(`${code}: ${filePath}`);
+    error.code = code;
+    throw error;
+  }
+}
+
+function normalizeError(error) {
+  const status = error?.status || error?.response?.status;
+  const requestId = error?.request_id || error?.requestID || error?.headers?.['x-request-id'];
+  let code = error?.code || error?.type || 'GENERATION_FAILED';
+  if (status === 401) code = 'OPENAI_AUTH_FAILED';
+  if (status === 402 || /billing|quota|credit/i.test(error?.message || '')) code = 'OPENAI_BILLING_OR_QUOTA';
+  if (status === 429) code = 'OPENAI_RATE_LIMIT';
+  if (status >= 500) code = 'OPENAI_UPSTREAM_ERROR';
+
+  return {
+    code,
+    status,
+    requestId,
+    message: error?.message || 'Unknown error'
   };
 }
 
