@@ -1,0 +1,1823 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minha Figurinha Copa 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rubik:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --copa-900: #001B5E;
+      --copa-800: #002678;
+      --copa-700: #0033A0;
+      --copa-500: #4A90F5;
+      --green-700: #005C36;
+      --green-600: #006B3F;
+      --green-400: #00A651;
+      --yellow: #FFED00;
+      --gold: #C9971E;
+      --gold-light: #F0D060;
+      --white: #FFFFFF;
+      --cream: #F8FAFD;
+      --gray-50: #F1F5F9;
+      --gray-200: #CBD5E1;
+      --gray-400: #94A3B8;
+      --gray-600: #475569;
+      --gray-800: #1E293B;
+      --black: #0B1120;
+      --red: #ef4444;
+      --body: 'Rubik', sans-serif;
+      --display: 'Bebas Neue', Impact, sans-serif;
+      --label: 'Space Grotesk', monospace;
+      --shadow: 0 24px 80px rgba(0,51,160,.30), 0 8px 24px rgba(0,0,0,.20);
+      --glow: 0 0 0 3px rgba(201,151,30,.25), 0 8px 32px rgba(201,151,30,.20);
+    }
+
+    [data-theme="light"] {
+      --copa-900: #f8fafc;
+      --black: #f8fafc;
+      --white: #1e293b;
+      --gray-800: #f1f5f9;
+      --gray-600: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      min-height: 100vh;
+      overflow-x: hidden;
+      font-family: var(--body);
+      color: var(--white);
+      background: var(--copa-900);
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    input, select, textarea { user-select: text; -webkit-user-select: text; }
+    img, .protected-figure {
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+    @media print {
+      body * { visibility: hidden !important; }
+      body::after {
+        content: 'PREVIEW PROTEGIDO - IMPRESSAO BLOQUEADA';
+        visibility: visible !important;
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #001B5E;
+        color: #fff;
+        font: 800 28px Arial, sans-serif;
+        z-index: 99999;
+      }
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      pointer-events: none;
+      opacity: .28;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E");
+    }
+    .hidden { display: none !important; }
+
+    /* ==================== NOVAS ANIMAÇÕES ==================== */
+    @keyframes card-enter {
+      from { opacity: 0; transform: translateY(40px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes card-exit {
+      from { opacity: 1; transform: translateY(0) scale(1); }
+      to { opacity: 0; transform: translateY(-20px) scale(0.98); }
+    }
+    @keyframes confetti-fall {
+      0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+    @keyframes hero-text-enter {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes figure-bounce {
+      0% { opacity: 0; transform: scale(0.7) rotate(-10deg); }
+      60% { transform: scale(1.08) rotate(2deg); }
+      100% { opacity: 1; transform: scale(1) rotate(0); }
+    }
+    @keyframes error-slide {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-light {
+      0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(0.8); }
+      50% { opacity: 1; transform: translateY(-50%) scale(1.1); }
+    }
+    @keyframes skeleton-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    @keyframes card-shine {
+      0%, 100% { transform: translateX(-100%) rotate(45deg); }
+      50% { transform: translateX(100%) rotate(45deg); }
+    }
+    @keyframes toast-enter {
+      from { opacity: 0; transform: translateX(-50%) translateY(100px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    @keyframes toast-exit {
+      from { opacity: 1; transform: translateX(-50%) translateY(0); }
+      to { opacity: 0; transform: translateX(-50%) translateY(100px); }
+    }
+
+    /* ==================== ACESSIBILIDADE ==================== */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* ==================== FOCUS VISIBLE ==================== */
+    .input:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(26,86,219,0.25), 0 0 0 2px var(--copa-700);
+    }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(26,86,219,0.25), 0 0 0 2px var(--copa-700);
+    }
+
+    .screen {
+      min-height: 100svh;
+      position: relative;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      flex-direction: column;
+      padding: 0 16px 30px;
+      overflow-x: hidden;
+      background:
+        radial-gradient(ellipse 80% 60% at 80% 0%, rgba(26,86,219,.55), transparent 70%),
+        radial-gradient(ellipse 70% 50% at 10% 100%, rgba(0,107,63,.25), transparent 60%),
+        var(--copa-900);
+    }
+    .screen.dark {
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 0%, rgba(0,107,63,.30), transparent 70%),
+        radial-gradient(ellipse 70% 50% at 90% 100%, rgba(26,86,219,.25), transparent 60%),
+        var(--black);
+    }
+    .screen.gold {
+      background: radial-gradient(ellipse at 50% 30%, rgba(201,151,30,.24), transparent 70%), var(--copa-900);
+    }
+    .screen::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background:
+        linear-gradient(45deg, rgba(255,255,255,.018) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,.018) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255,255,255,.018) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.018) 75%);
+      background-size: 60px 60px;
+    }
+    .screen > * { position: relative; z-index: 1; }
+
+    .topbar, .progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 22px;
+      background: linear-gradient(180deg, rgba(0,27,94,.92), transparent);
+      backdrop-filter: blur(14px);
+    }
+    .brand {
+      font-family: var(--display);
+      letter-spacing: 2.5px;
+      color: var(--gold-light);
+      font-size: 14px;
+    }
+    .progress-label, .progress-pct {
+      font-family: var(--display);
+      letter-spacing: 2px;
+      white-space: nowrap;
+      color: var(--gold-light);
+      font-size: 14px;
+    }
+    .progress-track {
+      flex: 1;
+      height: 8px;
+      border-radius: 99px;
+      overflow: hidden;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .progress-fill, .load-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--gold), var(--yellow), var(--gold));
+      background-size: 200% 100%;
+      animation: shimmer 1.8s linear infinite;
+      transition: width .35s ease;
+    }
+    @keyframes shimmer {
+      from { background-position: 200% 0; }
+      to { background-position: -200% 0; }
+    }
+
+    .hero {
+      width: 100%;
+      max-width: 500px;
+      padding-top: 72px;
+      text-align: center;
+    }
+    .display {
+      font-family: var(--display);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-shadow: 0 2px 28px rgba(0,0,0,.45);
+    }
+    .hero-title {
+      font-size: clamp(28px, 5.4vw, 54px);
+      line-height: 1.08;
+    }
+    .gold { color: var(--gold-light); }
+    .blue { color: #7BAEFF; }
+    .hero-title .main {
+      display: block;
+      color: var(--gold-light);
+      text-shadow: 0 0 40px rgba(201,151,30,.35);
+    }
+    .hero-copy {
+      color: rgba(255,255,255,.74);
+      font-size: 15px;
+      line-height: 1.8;
+      margin: 26px 0 24px;
+    }
+    .figures {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 42px 0 34px;
+      perspective: 1100px;
+    }
+    .figure-img {
+      width: 210px;
+      border-radius: 14px 14px 5px 5px;
+      box-shadow: 0 16px 50px rgba(0,0,0,.55);
+    }
+    .figure-img.left { transform: rotate(-9deg) translateX(30px) scale(.78); opacity: .54; filter: brightness(.75); }
+    .figure-img.main { z-index: 3; transform: scale(1.14) translateY(-10px); }
+    .figure-img.right { transform: rotate(7deg) translateX(-30px) scale(.80); opacity: .58; filter: brightness(.78); }
+
+    .flags {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 13px;
+      margin-top: 22px;
+      font-size: 30px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,.35));
+    }
+
+    .card {
+      width: min(100%, 440px);
+      margin-top: 76px;
+      padding: 38px 30px 28px;
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      background: rgba(255,255,255,.96);
+      color: var(--gray-800);
+      box-shadow: var(--shadow);
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--gold), var(--yellow), var(--gold));
+      background-size: 200% 100%;
+      animation: shimmer 2s linear infinite;
+    }
+    .step-icon {
+      display: block;
+      text-align: center;
+      font-size: 50px;
+      margin-bottom: 6px;
+    }
+    .step-title {
+      font-family: var(--display);
+      font-size: 27px;
+      letter-spacing: 3px;
+      text-align: center;
+      color: var(--gray-800);
+    }
+    .step-sub {
+      text-align: center;
+      color: var(--gray-600);
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 5px 0 24px;
+    }
+
+    .field { margin-bottom: 18px; }
+    .label {
+      display: block;
+      font-family: var(--label);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--copa-700);
+      margin-bottom: 8px;
+    }
+    .input {
+      width: 100%;
+      border: 2px solid var(--gray-200);
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--gray-800);
+      font: 500 16px var(--body);
+      padding: 15px 16px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .input:focus {
+      border-color: var(--copa-700);
+      box-shadow: 0 0 0 4px rgba(26,86,219,.10);
+    }
+    select.input {
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--gray-600) 50%), linear-gradient(135deg, var(--gray-600) 50%, transparent 50%);
+      background-position: calc(100% - 18px) 21px, calc(100% - 12px) 21px;
+      background-size: 6px 6px;
+      background-repeat: no-repeat;
+    }
+    .row-2, .row-3 { display: grid; gap: 12px; }
+    .row-2 { grid-template-columns: 1fr 1fr; }
+    .row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    .photo-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .photo-option {
+      border: 2px dashed var(--gray-200);
+      border-radius: 14px;
+      padding: 24px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: transform .12s, border-color .2s, background .2s;
+    }
+    .photo-option:hover {
+      border-color: var(--copa-500);
+      background: #EEF4FF;
+      transform: translateY(-2px);
+    }
+    .photo-option input { display: none; }
+    .photo-icon { display: block; font-size: 34px; margin-bottom: 8px; }
+    .photo-title {
+      display: block;
+      font-family: var(--display);
+      color: var(--copa-700);
+      letter-spacing: 1.5px;
+      font-size: 16px;
+    }
+    .photo-sub { display: block; color: var(--gray-600); font-size: 11px; margin-top: 3px; line-height: 1.35; }
+    .photo-preview {
+      display: block;
+      width: 128px;
+      height: 128px;
+      margin: 15px auto 0;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 4px solid var(--gold);
+      box-shadow: var(--glow);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: var(--display);
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      transition: transform .12s, box-shadow .2s, background .2s, color .2s;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary {
+      width: 100%;
+      padding: 17px 28px;
+      color: var(--white);
+      background: linear-gradient(135deg, var(--copa-700), var(--copa-900));
+      box-shadow: 0 8px 30px rgba(0,51,160,.55);
+    }
+    .btn-secondary {
+      padding: 14px 20px;
+      color: var(--copa-700);
+      background: var(--white);
+      border: 2px solid var(--copa-700);
+    }
+    .btn-ghost {
+      padding: 13px 20px;
+      color: var(--gray-600);
+      background: transparent;
+      border: 2px solid var(--gray-200);
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .btn-row .btn { flex: 1; }
+
+    .dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--gray-200);
+    }
+    .dot.active { background: var(--gold); transform: scale(1.45); box-shadow: 0 0 10px rgba(201,151,30,.5); }
+    .dot.done { background: var(--green-400); }
+
+    .shake { animation: shake .3s ease; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    .slide { animation: slide .45s cubic-bezier(.22,1,.36,1); }
+    @keyframes slide {
+      from { opacity: 0; transform: translateY(34px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ==================== CONFETTI ==================== */
+    .confetti-wrap {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1000;
+      overflow: hidden;
+    }
+    .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      top: -10px;
+      animation: confetti-fall 3s linear infinite;
+    }
+    .confetti:nth-child(odd) { background: var(--yellow); }
+    .confetti:nth-child(even) { background: var(--green-400); }
+    .confetti:nth-child(3n) { background: var(--gold); border-radius: 50%; }
+    .confetti:nth-child(5n) { width: 8px; height: 14px; border-radius: 2px; }
+
+    /* ==================== TOAST ==================== */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      padding: 14px 24px;
+      border-radius: 12px;
+      background: var(--gray-800);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      opacity: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toast.show {
+      animation: toast-enter 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    }
+    .toast.hide {
+      animation: toast-exit 0.3s ease forwards;
+    }
+    .toast-icon { font-size: 20px; }
+
+    /* ==================== SKELETON LOADING ==================== */
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-shimmer 1.5s infinite;
+      border-radius: 50%;
+    }
+
+    /* ==================== ERRO VISUAL ==================== */
+    .input.error {
+      border-color: var(--red);
+      box-shadow: 0 0 0 4px rgba(239,68,68,0.1);
+    }
+    .error-message {
+      color: var(--red);
+      font-size: 12px;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      animation: error-slide 0.3s ease;
+    }
+
+    /* ==================== LABEL FLUTUANTE ==================== */
+    .field { position: relative; margin-bottom: 18px; }
+    .field.float-label .label {
+      position: absolute;
+      top: 50%;
+      left: 16px;
+      transform: translateY(-50%);
+      transition: all 0.2s ease;
+      pointer-events: none;
+      background: var(--white);
+      padding: 0 4px;
+      margin-bottom: 0;
+    }
+    .field.float-label .input:focus ~ .label,
+    .field.float-label .input:not(:placeholder-shown) ~ .label {
+      top: 0;
+      font-size: 10px;
+      color: var(--copa-700);
+    }
+
+    /* ==================== RIPPLE BOTÕES ==================== */
+    .btn {
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.3) 10%, transparent 10.01%);
+      background-repeat: no-repeat;
+      background-position: 50%;
+      transform: scale(10, 10);
+      opacity: 0;
+      transition: transform 0.5s, opacity 1s;
+    }
+    .btn:active::after {
+      transform: scale(0, 0);
+      opacity: 0.3;
+      transition: 0s;
+    }
+
+    /* ==================== BRILHO CARD ==================== */
+    .card::after {
+      content: '';
+      position: absolute;
+      top: -100%;
+      left: -100%;
+      width: 300%;
+      height: 300%;
+      background: linear-gradient(45deg, transparent 45%, rgba(255,237,0,0.06) 50%, transparent 55%);
+      animation: card-shine 8s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ==================== PROGRESSO COM PULSO ==================== */
+    .progress-fill {
+      position: relative;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      right: -4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--yellow);
+      box-shadow: 0 0 10px var(--yellow), 0 0 20px rgba(255,237,0,0.5);
+      animation: pulse-light 1.5s ease-in-out infinite;
+    }
+
+    /* ==================== MINI-STICKER 3D ==================== */
+    .mini-sticker {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      transform-style: preserve-3d;
+    }
+    .mini-sticker:hover {
+      transform: perspective(1000px) rotateY(5deg) rotateX(-2deg) scale(1.02);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5), -10px 10px 30px rgba(0,0,0,0.2);
+    }
+
+    /* ==================== HERO ANIMATION ==================== */
+    .hero-title {
+      animation: hero-text-enter 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    .figure-img {
+      animation: figure-bounce 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      opacity: 0;
+    }
+    .figure-img.left { animation-delay: 0.3s; }
+    .figure-img.main { animation-delay: 0.1s; }
+    .figure-img.right { animation-delay: 0.5s; }
+    .hero-copy {
+      animation: hero-text-enter 0.8s 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
+    }
+    .btn-primary {
+      animation: hero-text-enter 0.8s 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
+    }
+    .flags {
+      animation: hero-text-enter 0.8s 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
+    }
+
+    /* ==================== SHARE BUTTONS ==================== */
+    .share-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .btn-share {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      color: var(--white);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .btn-share:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(255,255,255,0.4);
+      transform: translateY(-2px);
+    }
+    .btn-share svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    /* ==================== STEP NUMBER BACKGROUND ==================== */
+    .step-number-bg {
+      position: absolute;
+      top: -30px;
+      right: -15px;
+      font-family: var(--display);
+      font-size: 140px;
+      color: rgba(0,51,160,0.04);
+      pointer-events: none;
+      line-height: 1;
+      z-index: 0;
+      user-select: none;
+    }
+    .step-number-bg {
+      position: absolute;
+      top: -30px;
+      right: -15px;
+      font-family: var(--display);
+      font-size: 140px;
+      color: rgba(0,51,160,0.04);
+      pointer-events: none;
+      line-height: 1;
+      z-index: 0;
+    }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      border: 5px solid var(--gray-50);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-card {
+      text-align: center;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(241,245,249,.96)),
+        var(--white);
+    }
+    .loading-stage {
+      position: relative;
+      width: 196px;
+      height: 210px;
+      margin: 4px auto 20px;
+      display: grid;
+      place-items: center;
+    }
+    .loading-stage::before,
+    .loading-stage::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 36px;
+      border: 1px solid rgba(0,51,160,.12);
+      background: linear-gradient(135deg, rgba(0,51,160,.10), rgba(201,151,30,.12));
+      transform: rotate(-7deg);
+    }
+    .loading-stage::after {
+      inset: 16px;
+      transform: rotate(7deg);
+      background: linear-gradient(135deg, rgba(0,166,81,.14), rgba(255,237,0,.13));
+    }
+    .loading-stage .spinner {
+      position: absolute;
+      right: 9px;
+      bottom: 6px;
+      z-index: 3;
+      width: 58px;
+      height: 58px;
+      margin: 0;
+      border-width: 6px;
+      border-color: rgba(0,51,160,.12);
+      border-top-color: var(--gold);
+    }
+    .loading-asset {
+      position: relative;
+      z-index: 4;
+      width: 155px;
+      max-height: 178px;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 26px rgba(0,27,94,.22));
+      pointer-events: none;
+    }
+    .loading-asset.wide {
+      width: 196px;
+      max-height: 126px;
+      border-radius: 14px;
+      object-fit: cover;
+      border: 3px solid rgba(201,151,30,.55);
+      box-shadow: var(--glow);
+    }
+    .loader-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+      background: rgba(0,51,160,.08);
+      color: var(--copa-700);
+      font-family: var(--label);
+      font-size: 10px;
+      letter-spacing: 1.3px;
+      text-transform: uppercase;
+    }
+    .face-wrap {
+      position: relative;
+      z-index: 4;
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid var(--gold);
+      box-shadow: var(--glow);
+      background: var(--gray-50);
+    }
+    .face-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .load-wrap { margin-top: 24px; }
+    .load-top {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: var(--copa-700);
+      font-family: var(--label);
+      font-size: 12px;
+    }
+    .load-track {
+      width: 100%;
+      height: 13px;
+      border-radius: 99px;
+      overflow: hidden;
+      background: var(--gray-50);
+    }
+    .generation-frame {
+      width: 238px;
+      min-height: 190px;
+      margin: 2px auto 20px;
+      padding: 14px;
+      border-radius: 20px 20px 8px 8px;
+      background: linear-gradient(145deg, rgba(0,51,160,.12), rgba(201,151,30,.16));
+      border: 1px solid rgba(0,51,160,.12);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
+    }
+    .generation-frame .mini-sticker {
+      display: none;
+    }
+    .final-image {
+      width: min(100%, 340px);
+      aspect-ratio: 735 / 956;
+      display: block;
+      margin: 0 auto 16px;
+      border-radius: 16px 16px 6px 6px;
+      box-shadow: 0 18px 55px rgba(0,0,0,.42);
+      background: rgba(255,255,255,.08);
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .protected-figure::after {
+      content: 'PREVIEW PROTEGIDO  PREVIEW PROTEGIDO  DIREITOS AUTORAIS';
+      position: absolute;
+      inset: -20%;
+      display: grid;
+      place-items: center;
+      color: rgba(255,255,255,.34);
+      font: 900 20px var(--label);
+      letter-spacing: 3px;
+      text-align: center;
+      transform: rotate(-28deg);
+      pointer-events: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,.32);
+    }
+    .screen-shield {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      background: rgba(0,27,94,.96);
+      color: var(--white);
+      text-align: center;
+      font: 800 22px var(--label);
+      letter-spacing: 2px;
+    }
+    .screen-shield.active { display: grid; }
+    .copy-warning {
+      color: rgba(255,255,255,.64);
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 12px;
+    }
+
+    .summary {
+      list-style: none;
+      margin: 14px 0 24px;
+    }
+    .summary li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--gray-50);
+      padding: 11px 0;
+      font-size: 14px;
+    }
+    .summary-key {
+      font-family: var(--label);
+      color: var(--gray-600);
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .summary-val {
+      color: var(--gray-800);
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .mini-sticker {
+      width: 190px;
+      height: 264px;
+      margin: 0 auto 18px;
+      overflow: hidden;
+      border-radius: 16px 16px 6px 6px;
+      box-shadow: 0 18px 55px rgba(0,0,0,.42);
+      background: linear-gradient(155deg, #00C8B4, #0033A0 54%, #001B5E);
+      display: flex;
+      flex-direction: column;
+    }
+    .sticker-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0,107,63,.86);
+      padding: 7px 10px;
+    }
+    .fifa {
+      background: var(--white);
+      color: var(--copa-700);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: var(--display);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+    }
+    .num {
+      color: var(--white);
+      font-family: var(--display);
+      font-size: 50px;
+      line-height: 1;
+      text-shadow: 0 2px 10px rgba(0,0,0,.45);
+    }
+    .sticker-photo {
+      position: relative;
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--copa-500), var(--copa-800));
+      font-size: 58px;
+    }
+    .sticker-photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .wm {
+      position: absolute;
+      inset: -20px;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 8px 0;
+      opacity: .16;
+      pointer-events: none;
+      transform: rotate(-32deg);
+      color: var(--white);
+      font-family: var(--display);
+      font-size: 12px;
+      letter-spacing: 2px;
+      line-height: 1;
+    }
+    .wm span { white-space: nowrap; padding-right: 16px; }
+    .sticker-name {
+      background: var(--green-600);
+      color: var(--white);
+      text-align: center;
+      padding: 10px 7px 8px;
+    }
+    .sticker-name strong {
+      display: block;
+      font-family: var(--display);
+      font-size: 18px;
+      letter-spacing: 3px;
+      line-height: 1;
+    }
+    .sticker-name small {
+      display: block;
+      margin-top: 4px;
+      font-size: 8px;
+      opacity: .9;
+    }
+    .sticker-club {
+      background: rgba(0,45,28,.88);
+      color: var(--white);
+      text-align: center;
+      font-size: 8px;
+      letter-spacing: 1.5px;
+      padding: 5px 8px 9px;
+    }
+    .big-sticker {
+      width: 230px;
+      height: 318px;
+      margin: 0 auto 16px;
+      border-radius: 18px 18px 6px 6px;
+    }
+    .big-sticker .num { font-size: 60px; }
+    .big-sticker .fifa { font-size: 11px; }
+    .big-sticker .sticker-name strong { font-size: 21px; }
+    .big-sticker .sticker-name small { font-size: 9px; }
+    .big-sticker .sticker-club { font-size: 9px; }
+
+    .goal {
+      font-family: var(--display);
+      font-size: 58px;
+      letter-spacing: 9px;
+      color: var(--gold-light);
+      text-align: center;
+      text-shadow: 0 0 36px rgba(201,151,30,.45), 0 4px 12px rgba(0,0,0,.5);
+      margin-top: 58px;
+    }
+    .ready {
+      text-align: center;
+      font-weight: 700;
+      font-size: 20px;
+      margin: 4px 0 18px;
+    }
+    .success-copy {
+      text-align: center;
+      color: rgba(255,255,255,.72);
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+    .price {
+      font-family: var(--display);
+      color: var(--green-400);
+      font-size: 52px;
+      letter-spacing: 4px;
+      text-align: center;
+      text-shadow: 0 0 30px rgba(0,166,81,.45);
+      margin-bottom: 26px;
+    }
+
+    /* ==================== TABLETS ==================== */
+    @media (min-width: 768px) {
+      .card {
+        max-width: 600px;
+        padding: 48px 40px 36px;
+      }
+      .photo-options {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .row-2 {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+      }
+      .step-number-bg {
+        font-size: 180px;
+        top: -40px;
+        right: -20px;
+      }
+    }
+
+    /* ==================== LANDSCAPE MOBILE ==================== */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .hero { padding-top: 20px; }
+      .figures { padding: 10px 0; transform: scale(0.7); }
+      .card { margin-top: 20px; padding: 20px; }
+      .step-icon { font-size: 30px; margin-bottom: 4px; }
+      .step-number-bg { display: none; }
+      .confetti-wrap { display: none; }
+    }
+
+    /* ==================== MOBILE ==================== */
+    @media (max-width: 540px) {
+      .screen { overflow-y: auto; padding-inline: 12px; }
+      .topbar, .progress { padding: 10px 12px; gap: 8px; }
+      .progress-label, .progress-pct { font-size: 12px; }
+      .hero { padding-top: 68px; }
+      .hero-title { font-size: clamp(25px, 8vw, 38px); }
+      .figures { padding: 30px 0 26px; }
+      .figure-img { width: 148px; }
+      .figure-img.left, .figure-img.right { display: none; }
+      .figure-img.main { transform: scale(1.05); }
+      .card { margin-top: 64px; padding: 34px 20px 26px; border-radius: 22px; }
+      .row-2, .row-3, .photo-options { grid-template-columns: 1fr; }
+      .btn-row { flex-direction: column-reverse; }
+      .step-title { font-size: 23px; }
+      .goal { font-size: 48px; letter-spacing: 6px; }
+      .price { font-size: 44px; }
+      .btn { font-size: 15px; letter-spacing: 1.4px; }
+      .step-number-bg { font-size: 100px; top: -20px; right: -10px; }
+      .toast { bottom: 16px; font-size: 13px; padding: 12px 18px; }
+      .share-row { gap: 10px; }
+      .btn-share { width: 44px; height: 44px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="landing" class="screen">
+      <div class="topbar">
+        <div class="brand">COPA 2026</div>
+        <div style="flex:1"></div>
+        <button id="theme-toggle" aria-label="Alternar tema claro/escuro" style="width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);cursor:pointer;color:inherit;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="hero">
+        <h1 class="display hero-title">
+          <span class="gold">Transforme seu filho</span><br>
+          em uma <span class="main">figurinha</span>
+          <span class="blue">personalizada</span><br>
+          da Copa do Mundo
+        </h1>
+
+        <div class="figures">
+          <img class="figure-img left" src="/uploads/figurinha-helena.webp" alt="Figurinha da Helena" loading="lazy" decoding="async">
+          <img class="figure-img main" src="/uploads/figurinha-miguel.webp" alt="Figurinha do Miguel" loading="eager" decoding="async">
+          <img class="figure-img right" src="/uploads/figurinha-arthur.webp" alt="Figurinha do Arthur" loading="lazy" decoding="async">
+        </div>
+
+        <p class="hero-copy">
+          Responda algumas perguntas rápidas e veja como criar uma figurinha exclusiva,
+          com nome, foto e estilo do seu pequeno craque.
+        </p>
+
+        <button class="btn btn-primary" onclick="go('s1')" aria-label="Iniciar criação de figurinha">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          Iniciar agora
+        </button>
+
+        <div class="flags" aria-hidden="true">
+          <span>🇧🇷</span><span>🇦🇷</span><span>🇫🇷</span><span>🇩🇪</span><span>🇪🇸</span>
+          <span>🇲🇽</span><span>🇵🇹</span><span>🇺🇾</span><span>🇨🇷</span><span>🇯🇵</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="s1" class="screen hidden">
+      <div class="progress" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+        <span class="progress-label">Passo 1 de 4</span>
+        <div class="progress-track"><div class="progress-fill" style="width:25%"></div></div>
+        <span class="progress-pct">25%</span>
+      </div>
+      <div class="card slide" data-step="1">
+        <span class="step-number-bg">01</span>
+        <span class="step-icon">✏️</span>
+        <h2 class="step-title">Qual o nome do craque?</h2>
+        <p class="step-sub">O nome que vai aparecer na figurinha.</p>
+
+        <div class="field float-label">
+          <input id="in-nome" class="input" type="text" placeholder=" " autocomplete="off" aria-label="Nome do craque">
+          <label class="label" for="in-nome">Nome e sobrenome</label>
+        </div>
+
+        <div class="field">
+          <label class="label">Foto do craque</label>
+          <div class="photo-options">
+            <label class="photo-option">
+              <input id="foto-up" type="file" accept="image/*" onchange="handlePhoto(event)" aria-label="Enviar foto da galeria">
+              <span class="photo-icon">🖼️</span>
+              <span class="photo-title">Enviar foto</span>
+              <span class="photo-sub">Do rosto, não de corpo todo</span>
+            </label>
+            <label class="photo-option">
+              <input id="foto-cam" type="file" accept="image/*" capture="environment" onchange="handlePhoto(event)" aria-label="Tirar foto com a câmera">
+              <span class="photo-icon">📷</span>
+              <span class="photo-title">Câmera</span>
+              <span class="photo-sub">Tire agora pelo celular</span>
+            </label>
+          </div>
+          <img id="prev-foto" class="photo-preview hidden" alt="Preview da foto">
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="go('landing')" aria-label="Voltar para o início">Voltar</button>
+          <button class="btn btn-primary" onclick="valStep1()" aria-label="Ir para o próximo passo">Próximo</button>
+        </div>
+        <div class="dots" role="tablist" aria-label="Progresso dos passos"><span class="dot active" role="tab" aria-selected="true"></span><span class="dot" role="tab"></span><span class="dot" role="tab"></span><span class="dot" role="tab"></span></div>
+      </div>
+    </section>
+
+    <section id="s2" class="screen dark hidden">
+      <div class="progress"><span class="progress-label">Passo 2 de 4</span><div class="progress-track"><div class="progress-fill" style="width:50%"></div></div><span class="progress-pct">50%</span></div>
+      <div class="card slide loading-card">
+        <h2 class="step-title">Carregando foto</h2>
+        <div class="loader-chip">Preparando imagem enviada</div>
+        <div class="loading-stage">
+          <img class="loading-asset" src="/brasil-veio.png" alt="" draggable="false">
+          <div class="spinner"></div>
+          <div class="face-wrap"><img id="load-face" alt=""></div>
+        </div>
+        <p id="load-caption" class="step-sub">Analisando a foto do craque...</p>
+        <div class="load-wrap">
+          <div class="load-top"><span>Carregando</span><span id="l1-pct">0%</span></div>
+          <div class="load-track"><div id="l1-bar" class="load-fill" style="width:0%"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="s3" class="screen hidden">
+      <div class="progress" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100">
+        <span class="progress-label">Passo 2 de 4</span>
+        <div class="progress-track"><div class="progress-fill" style="width:50%"></div></div>
+        <span class="progress-pct">50%</span>
+      </div>
+      <div class="card slide" data-step="2">
+        <span class="step-number-bg">02</span>
+        <span class="step-icon">🎂</span>
+        <h2 class="step-title">Data de nascimento</h2>
+        <p class="step-sub">Para calcular a idade na figurinha.</p>
+        <div class="field">
+          <div class="row-3">
+            <div><label class="label" for="sel-dia">Dia</label><select id="sel-dia" class="input" aria-label="Dia do nascimento"><option value="">--</option></select></div>
+            <div><label class="label" for="sel-mes">Mês</label><select id="sel-mes" class="input" aria-label="Mês do nascimento"><option value="">--</option><option>Janeiro</option><option>Fevereiro</option><option>Março</option><option>Abril</option><option>Maio</option><option>Junho</option><option>Julho</option><option>Agosto</option><option>Setembro</option><option>Outubro</option><option>Novembro</option><option>Dezembro</option></select></div>
+            <div><label class="label" for="sel-ano">Ano</label><select id="sel-ano" class="input" aria-label="Ano do nascimento"><option value="">----</option></select></div>
+          </div>
+        </div>
+        <div class="field float-label">
+          <input id="in-email" class="input" type="email" placeholder=" " autocomplete="off" aria-label="Email para contato">
+          <label class="label" for="in-email">Seu melhor e-mail</label>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="go('s1')" aria-label="Voltar para o passo anterior">Voltar</button>
+          <button class="btn btn-primary" onclick="valStep2()" aria-label="Ir para o próximo passo">Próximo</button>
+        </div>
+        <div class="dots" role="tablist" aria-label="Progresso dos passos"><span class="dot done" role="tab"></span><span class="dot active" role="tab" aria-selected="true"></span><span class="dot" role="tab"></span><span class="dot" role="tab"></span></div>
+      </div>
+    </section>
+
+    <section id="s4" class="screen hidden">
+      <div class="progress" role="progressbar" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100">
+        <span class="progress-label">Passo 3 de 4</span>
+        <div class="progress-track"><div class="progress-fill" style="width:75%"></div></div>
+        <span class="progress-pct">75%</span>
+      </div>
+      <div class="card slide" data-step="3">
+        <span class="step-number-bg">03</span>
+        <span class="step-icon">⭐</span>
+        <h2 class="step-title">Clube e dados</h2>
+        <p class="step-sub">O clube do coração e os dados da figurinha.</p>
+        <div class="field float-label">
+          <input id="in-clube" class="input" type="text" placeholder=" " aria-label="Nome do clube do coração">
+          <label class="label" for="in-clube">Clube do coração</label>
+        </div>
+        <div class="row-2">
+          <div class="field float-label">
+            <input id="in-peso" class="input" type="number" min="1" max="150" placeholder=" " aria-label="Peso em quilos">
+            <label class="label" for="in-peso">Peso (kg)</label>
+          </div>
+          <div class="field float-label">
+            <input id="in-altura" class="input" type="number" min="30" max="220" placeholder=" " aria-label="Altura em centímetros">
+            <label class="label" for="in-altura">Altura (cm)</label>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="go('s3')" aria-label="Voltar para o passo anterior">Voltar</button>
+          <button class="btn btn-primary" onclick="valStep3()" aria-label="Ir para o próximo passo">Próximo</button>
+        </div>
+        <div class="dots" role="tablist" aria-label="Progresso dos passos"><span class="dot done" role="tab"></span><span class="dot done" role="tab"></span><span class="dot active" role="tab" aria-selected="true"></span><span class="dot" role="tab"></span></div>
+      </div>
+    </section>
+
+    <section id="s5" class="screen hidden">
+      <div class="progress" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+        <span class="progress-label">Passo 4 de 4</span>
+        <div class="progress-track"><div class="progress-fill" style="width:100%"></div></div>
+        <span class="progress-pct">100%</span>
+      </div>
+      <div class="card slide" data-step="4">
+        <span class="step-number-bg">04</span>
+        <span class="step-icon">⚽</span>
+        <h2 class="step-title">Confira seus dados</h2>
+        <p class="step-sub">Revise os dados abaixo com atenção.</p>
+        <div style="text-align:center;margin-bottom:14px"><img id="sum-foto" class="photo-preview" alt="Foto do craque"></div>
+        <ul class="summary" aria-label="Resumo dos dados informados">
+          <li><span class="summary-key">Nome</span><span id="su-nome" class="summary-val">-</span></li>
+          <li><span class="summary-key">Peso</span><span id="su-peso" class="summary-val">-</span></li>
+          <li><span class="summary-key">Altura</span><span id="su-altura" class="summary-val">-</span></li>
+          <li><span class="summary-key">Clube</span><span id="su-clube" class="summary-val">-</span></li>
+        </ul>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-primary" onclick="go('s6')" aria-label="Confirmar e gerar figurinha">Entendi, gerar figurinha</button>
+          <button class="btn btn-ghost" onclick="go('s3')" aria-label="Corrigir dados informados">Corrigir dados</button>
+        </div>
+        <div class="dots" role="tablist" aria-label="Progresso dos passos"><span class="dot done" role="tab"></span><span class="dot done" role="tab"></span><span class="dot done" role="tab"></span><span class="dot active" role="tab" aria-selected="true"></span></div>
+      </div>
+    </section>
+
+    <section id="s6" class="screen dark hidden">
+      <div class="progress"><span class="progress-label">Gerando...</span><div class="progress-track"><div id="l2bar-top" class="progress-fill" style="width:0%"></div></div><span id="l2pct-top" class="progress-pct">0%</span></div>
+      <div class="card slide loading-card">
+        <h2 class="step-title">Gerando sua figurinha</h2>
+        <div class="loader-chip" id="l2-chip">Renderizacao segura</div>
+        <p id="l2-sub" class="step-sub">Não saia da página. A arte final está sendo montada com seus dados.</p>
+        <div class="generation-frame">
+          <img class="loading-asset wide" src="/brasil.webp" alt="" draggable="false">
+          <div id="preview-sticker" class="mini-sticker"></div>
+        </div>
+        <div class="load-wrap">
+          <div class="load-top"><span id="l2-label">Enviando dados</span><span id="l2-pct">0%</span></div>
+          <div class="load-track"><div id="l2-bar" class="load-fill" style="width:0%"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="s7" class="screen gold hidden">
+      <div class="confetti-wrap" aria-hidden="true">
+        <div class="confetti" style="left:5%;animation-delay:0s"></div>
+        <div class="confetti" style="left:15%;animation-delay:0.2s"></div>
+        <div class="confetti" style="left:25%;animation-delay:0.4s"></div>
+        <div class="confetti" style="left:35%;animation-delay:0.1s"></div>
+        <div class="confetti" style="left:45%;animation-delay:0.3s"></div>
+        <div class="confetti" style="left:55%;animation-delay:0.5s"></div>
+        <div class="confetti" style="left:65%;animation-delay:0.15s"></div>
+        <div class="confetti" style="left:75%;animation-delay:0.35s"></div>
+        <div class="confetti" style="left:85%;animation-delay:0.25s"></div>
+        <div class="confetti" style="left:95%;animation-delay:0.45s"></div>
+      </div>
+      <div style="width:min(100%,460px);text-align:center">
+        <div class="goal">GOOOOL!</div>
+        <p class="ready">Sua figurinha está pronta!</p>
+        <div id="final-image" class="final-image protected-figure hidden" role="img" aria-label="Figurinha personalizada pronta"></div>
+        <div id="final-sticker" class="mini-sticker big-sticker"></div>
+        <p class="success-copy">Para receber o arquivo final, avance para o checkout. O preview fica protegido com marca d'água.</p>
+        <div class="price">R$12,90</div>
+        <button class="btn btn-primary" onclick="checkout()" aria-label="Ir para pagamento da figurinha">Receber minha figurinha</button>
+        <div class="share-row">
+          <button class="btn-share" onclick="shareWhatsApp()" aria-label="Compartilhar no WhatsApp">
+            <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          </button>
+          <button class="btn-share" onclick="copyLink()" aria-label="Copiar link do site">
+            <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+          </button>
+        </div>
+        <p class="copy-warning">Compartilhamento e copia usam apenas o link do site, nunca o arquivo da figurinha.</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="screen-shield" class="screen-shield">PREVIEW PROTEGIDO<br>direitos autorais aplicados</div>
+
+  <!-- Toast Container -->
+  <div id="toast" class="toast" role="alert" aria-live="polite">
+    <span class="toast-icon"></span>
+    <span class="toast-text"></span>
+  </div>
+
+  <script>
+    'use strict';
+
+    const SCREENS = ['landing', 's1', 's2', 's3', 's4', 's5', 's6', 's7'];
+    const D = {
+      nome: '',
+      email: '',
+      dia: '',
+      mes: '',
+      ano: '',
+      clube: '',
+      peso: '',
+      altura: '',
+      photoSrc: '',
+      photoFile: null,
+      stickerId: '',
+      generatedImageUrl: ''
+    };
+    const CONFIG = {
+      checkoutUrl: 'https://www.zuckpay.com.br/checkout/sua-figurinha-da-copa-2026'
+    };
+    const timers = new Set();
+
+    function addTimeout(fn, ms) {
+      const id = setTimeout(() => { timers.delete(id); fn(); }, ms);
+      timers.add(id);
+      return id;
+    }
+    function addInterval(fn, ms) {
+      const id = setInterval(fn, ms);
+      timers.add(id);
+      return id;
+    }
+    function clearFlowTimers() {
+      timers.forEach(id => { clearTimeout(id); clearInterval(id); });
+      timers.clear();
+    }
+
+    // ==================== DEBOUNCE ====================
+    function debounce(fn, delay) {
+      let timeout;
+      return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn(...args), delay);
+      };
+    }
+
+    // ==================== TOAST NOTIFICATIONS ====================
+    let toastTimeout;
+    function showToast(message, icon = '✅', duration = 3000) {
+      const toast = document.getElementById('toast');
+      toast.querySelector('.toast-icon').textContent = icon;
+      toast.querySelector('.toast-text').textContent = message;
+      toast.classList.remove('hide');
+      toast.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+        toast.classList.add('hide');
+      }, duration);
+    }
+
+    // ==================== THEME TOGGLE ====================
+    function initThemeToggle() {
+      const btn = document.getElementById('theme-toggle');
+      const saved = localStorage.getItem('copa-theme');
+      if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      
+      btn?.addEventListener('click', () => {
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        if (isLight) {
+          document.documentElement.removeAttribute('data-theme');
+          localStorage.setItem('copa-theme', 'dark');
+          btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+          localStorage.setItem('copa-theme', 'light');
+          btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
+        }
+        showToast('Tema alterado!', '🎨', 2000);
+      });
+    }
+
+    // ==================== SHARE FUNCTIONS ====================
+    function getShareUrl() {
+      return `${window.location.origin}${window.location.pathname}`;
+    }
+
+    function shareWhatsApp() {
+      const text = encodeURIComponent(`Crie sua figurinha personalizada da Copa 2026: ${getShareUrl()}`);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+      showToast('Compartilhando link do site...', '📱');
+    }
+
+    function copyLink() {
+      navigator.clipboard.writeText(getShareUrl()).then(() => {
+        showToast('Link do site copiado!', '🔗');
+      }).catch(() => {
+        showToast('Erro ao copiar link', '❌');
+      });
+    }
+
+    // ==================== VISUAL VALIDATION ====================
+    function showFieldError(inputId, message) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      input.classList.add('error');
+      let errorEl = input.parentElement.querySelector('.error-message');
+      if (!errorEl) {
+        errorEl = document.createElement('div');
+        errorEl.className = 'error-message';
+        input.parentElement.appendChild(errorEl);
+      }
+      errorEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>${message}`;
+    }
+
+    function clearFieldError(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      input.classList.remove('error');
+      const errorEl = input.parentElement.querySelector('.error-message');
+      if (errorEl) errorEl.remove();
+    }
+
+    // ==================== CLEAR ERRORS ON INPUT ====================
+    document.addEventListener('input', debounce((e) => {
+      if (e.target.classList?.contains('input')) {
+        clearFieldError(e.target.id);
+      }
+    }, 300));
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const day = document.getElementById('sel-dia');
+      const year = document.getElementById('sel-ano');
+      const currentYear = new Date().getFullYear();
+      for (let i = 1; i <= 31; i++) day.add(new Option(String(i).padStart(2, '0'), String(i).padStart(2, '0')));
+      for (let y = currentYear; y >= currentYear - 130; y--) year.add(new Option(y, y));
+      renderSticker('preview-sticker');
+      renderSticker('final-sticker');
+      initThemeToggle();
+    });
+
+    function go(id) {
+      const target = document.getElementById(id);
+      if (!target) return;
+      clearFlowTimers();
+      SCREENS.forEach(screenId => document.getElementById(screenId)?.classList.add('hidden'));
+      target.classList.remove('hidden');
+      window.scrollTo(0, 0);
+      const card = target.querySelector('.card');
+      if (card) {
+        card.classList.remove('slide');
+        card.offsetHeight;
+        card.classList.add('slide');
+      }
+      if (id === 's2') addTimeout(runPhotoLoader, 160);
+      if (id === 's5') addTimeout(popSummary, 80);
+      if (id === 's6') addTimeout(runGenerationLoader, 160);
+      if (id === 's7') renderFinalSticker();
+    }
+
+    function shake() {
+      const card = document.querySelector('.screen:not(.hidden) .card');
+      card?.classList.add('shake');
+      setTimeout(() => card?.classList.remove('shake'), 350);
+    }
+
+    function handlePhoto(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      D.photoFile = file;
+      const reader = new FileReader();
+      reader.onload = e => {
+        D.photoSrc = e.target.result;
+        const preview = document.getElementById('prev-foto');
+        preview.src = D.photoSrc;
+        preview.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function valStep1() {
+      D.nome = document.getElementById('in-nome').value.trim();
+      clearFieldError('in-nome');
+      
+      let hasError = false;
+      if (!D.nome) {
+        showFieldError('in-nome', 'Nome é obrigatório');
+        hasError = true;
+      }
+      if (!D.photoSrc || !D.photoFile) {
+        showToast('Envie a foto do craque', '📷');
+        hasError = true;
+      }
+      
+      if (hasError) { shake(); return; }
+      go('s2');
+    }
+    
+    function valStep2() {
+      D.dia = document.getElementById('sel-dia').value;
+      D.mes = document.getElementById('sel-mes').value;
+      D.ano = document.getElementById('sel-ano').value;
+      D.email = document.getElementById('in-email').value.trim();
+      clearFieldError('in-email');
+      
+      let hasError = false;
+      if (!D.dia || !D.mes || !D.ano) {
+        showToast('Selecione a data de nascimento', '📅');
+        hasError = true;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(D.email)) {
+        showFieldError('in-email', 'Email inválido');
+        hasError = true;
+      }
+      
+      if (hasError) { shake(); return; }
+      go('s4');
+    }
+    
+    function valStep3() {
+      D.clube = document.getElementById('in-clube').value.trim();
+      D.peso = document.getElementById('in-peso').value;
+      D.altura = document.getElementById('in-altura').value;
+      clearFieldError('in-clube');
+      clearFieldError('in-peso');
+      clearFieldError('in-altura');
+      
+      let hasError = false;
+      if (!D.clube) {
+        showFieldError('in-clube', 'Clube é obrigatório');
+        hasError = true;
+      }
+      if (Number(D.peso) < 1) {
+        showFieldError('in-peso', 'Peso inválido');
+        hasError = true;
+      }
+      if (Number(D.altura) < 30) {
+        showFieldError('in-altura', 'Altura inválida');
+        hasError = true;
+      }
+      
+      if (hasError) { shake(); return; }
+      go('s5');
+    }
+
+    function runPhotoLoader() {
+      document.getElementById('load-face').src = D.photoSrc;
+      const captions = ['Analisando a foto de craque...', 'Detectando sorriso...', 'Processando rosto...', 'Foto carregada!'];
+      let captionIndex = 0;
+      let value = 0;
+      const captionTimer = addInterval(() => {
+        captionIndex = Math.min(captionIndex + 1, captions.length - 1);
+        document.getElementById('load-caption').textContent = captions[captionIndex];
+      }, 620);
+      const timer = addInterval(() => {
+        value += Math.random() * 9 + 4;
+        if (value >= 100) {
+          value = 100;
+          clearInterval(timer);
+          clearInterval(captionTimer);
+          timers.delete(timer);
+          timers.delete(captionTimer);
+          addTimeout(() => go('s3'), 450);
+        }
+        document.getElementById('l1-bar').style.width = `${value}%`;
+        document.getElementById('l1-pct').textContent = `${Math.round(value)}%`;
+      }, 90);
+    }
+
+    function popSummary() {
+      document.getElementById('sum-foto').src = D.photoSrc;
+      document.getElementById('su-nome').textContent = D.nome.toUpperCase();
+      document.getElementById('su-peso').textContent = `${D.peso} kg`;
+      document.getElementById('su-altura').textContent = `${D.altura} cm`;
+      document.getElementById('su-clube').textContent = D.clube.toUpperCase();
+    }
+
+    async function runGenerationLoader() {
+      document.querySelector('#s6 [data-retry]')?.remove();
+      document.getElementById('l2-sub').textContent = 'Não saia da página. A arte final está sendo montada com seus dados.';
+      document.getElementById('l2-label').textContent = 'Enviando dados';
+      document.getElementById('l2-chip').textContent = 'Renderizacao segura';
+      document.getElementById('l2-bar').style.width = '0%';
+      document.getElementById('l2bar-top').style.width = '0%';
+      document.getElementById('l2-pct').textContent = '0%';
+      document.getElementById('l2pct-top').textContent = '0%';
+      renderSticker('preview-sticker');
+      let value = 0;
+      let done = false;
+      const captions = [
+        ['Enviando dados', 'Renderizacao segura'],
+        ['Aplicando foto no mockup', 'Composicao da figurinha'],
+        ['Gravando marca d agua', 'Protecao do preview'],
+        ['Finalizando arquivo', 'Arte quase pronta']
+      ];
+      let captionIndex = 0;
+
+      const timer = addInterval(() => {
+        captionIndex = Math.min(Math.floor(value / 28), captions.length - 1);
+        document.getElementById('l2-label').textContent = captions[captionIndex][0];
+        document.getElementById('l2-chip').textContent = captions[captionIndex][1];
+
+        value += done ? 9 : Math.random() * 4.5 + 1.4;
+        if (!done && value > 91) value = 91;
+        if (done && value >= 100) {
+          value = 100;
+          clearInterval(timer);
+          timers.delete(timer);
+          addTimeout(() => go('s7'), 520);
+        }
+        const pct = `${Math.round(value)}%`;
+        document.getElementById('l2-bar').style.width = `${value}%`;
+        document.getElementById('l2bar-top').style.width = `${value}%`;
+        document.getElementById('l2-pct').textContent = pct;
+        document.getElementById('l2pct-top').textContent = pct;
+      }, 130);
+
+      try {
+        const result = await submitSticker();
+        D.stickerId = result.id;
+        D.generatedImageUrl = result.imageUrl;
+        done = true;
+      } catch (error) {
+        clearInterval(timer);
+        timers.delete(timer);
+        value = 0;
+        document.getElementById('l2-sub').textContent = error.message || 'Nao foi possivel gerar a figurinha. Tente novamente.';
+        document.getElementById('l2-label').textContent = 'Erro na geracao';
+        document.getElementById('l2-chip').textContent = 'Revise os dados';
+        document.getElementById('l2-bar').style.width = '0%';
+        document.getElementById('l2bar-top').style.width = '0%';
+        document.getElementById('l2-pct').textContent = '0%';
+        document.getElementById('l2pct-top').textContent = '0%';
+        const card = document.querySelector('#s6 .card');
+        const retry = document.createElement('button');
+        retry.className = 'btn btn-primary';
+        retry.style.marginTop = '18px';
+        retry.textContent = 'Tentar novamente';
+        retry.onclick = () => go('s6');
+        if (!card.querySelector('[data-retry]')) {
+          retry.dataset.retry = 'true';
+          card.appendChild(retry);
+        }
+      }
+    }
+
+    async function submitSticker() {
+      const form = new FormData();
+      form.append('photo', D.photoFile);
+      ['nome', 'email', 'dia', 'mes', 'ano', 'clube', 'peso', 'altura'].forEach(key => {
+        form.append(key, D[key]);
+      });
+
+      const response = await fetch('/api/stickers', {
+        method: 'POST',
+        body: form
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao gerar a figurinha.');
+      return payload;
+    }
+
+    function renderFinalSticker() {
+      const finalImg = document.getElementById('final-image');
+      const finalFallback = document.getElementById('final-sticker');
+      if (D.generatedImageUrl) {
+        finalImg.style.backgroundImage = `url("${D.generatedImageUrl}?v=${Date.now()}")`;
+        finalImg.classList.remove('hidden');
+        finalFallback.classList.add('hidden');
+        return;
+      }
+      finalImg.style.backgroundImage = '';
+      finalImg.classList.add('hidden');
+      finalFallback.classList.remove('hidden');
+      renderSticker('final-sticker');
+    }
+
+    function renderSticker(targetId) {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      const name = (D.nome || 'MIGUEL').toUpperCase();
+      const club = (D.clube || 'CLUBE ESTRELINHA FC').toUpperCase();
+      const details = `${D.dia || '15'}/${D.mes || '03'}/${D.ano || '2018'} | ${Number(D.altura || 122) / 100}m | ${D.peso || 24}kg`;
+      const photo = D.photoSrc ? `<img src="${D.photoSrc}" alt="Foto do craque">` : '⚽';
+      const wm = Array.from({ length: 42 }, () => '<span>COPA DO MUNDO 2026 FIFA</span>').join('');
+      target.innerHTML = `
+        <div class="sticker-top"><span class="fifa">FIFA</span><span class="num">23</span></div>
+        <div class="sticker-photo">${photo}<div class="wm">${wm}</div></div>
+        <div class="sticker-name"><strong>${name}</strong><small>${details}</small></div>
+        <div class="sticker-club">${club}</div>
+      `;
+    }
+
+    function checkout() {
+      const sep = CONFIG.checkoutUrl.includes('?') ? '&' : '?';
+      const params = new URLSearchParams({
+        prefilled_email: D.email || '',
+        client_reference_id: D.stickerId || ''
+      });
+      window.open(`${CONFIG.checkoutUrl}${sep}${params.toString()}`, '_blank');
+    }
+
+    window.addEventListener('beforeunload', e => {
+      const current = SCREENS.find(id => !document.getElementById(id)?.classList.contains('hidden'));
+      if (!['landing', 's7'].includes(current || '')) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    function showShield() {
+      const shield = document.getElementById('screen-shield');
+      shield.classList.add('active');
+      showToast('Preview protegido contra copia.', '🔒', 1800);
+      setTimeout(() => shield.classList.remove('active'), 1200);
+    }
+
+    document.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      showToast('Salvar imagem está bloqueado no preview.', '🔒');
+    });
+
+    document.addEventListener('dragstart', event => {
+      if (event.target.tagName === 'IMG' || event.target.classList?.contains('protected-figure')) {
+        event.preventDefault();
+      }
+    });
+
+    document.addEventListener('copy', event => {
+      const current = SCREENS.find(id => !document.getElementById(id)?.classList.contains('hidden'));
+      if (current === 's7') {
+        event.preventDefault();
+        event.clipboardData?.setData('text/plain', getShareUrl());
+        showToast('Copiado apenas o link do site.', '🔗');
+      }
+    });
+
+    document.addEventListener('keydown', event => {
+      const key = event.key.toLowerCase();
+      const blocked = key === 'printscrn' ||
+        (event.ctrlKey && ['s', 'p', 'u'].includes(key)) ||
+        (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key));
+      if (blocked) {
+        event.preventDefault();
+        showShield();
+      }
+    });
+  </script>
+</body>
+</html>

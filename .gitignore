@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+npm-debug.log*
+
+public/output/
+public/uploads/*-original.jpg
+public/uploads/*-player.png
+public/uploads/f1ddc997a25e77eea3403e558f88c865
+
+.DS_Store
+.write-test
+.agents/
+.codex/
