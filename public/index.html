@@ -1386,7 +1386,8 @@
       photoSrc: '',
       photoFile: null,
       stickerId: '',
-      generatedImageUrl: ''
+      generatedImageUrl: '',
+      generatedImageDataUrl: ''
     };
     const CONFIG = {
       checkoutUrl: 'https://www.zuckpay.com.br/checkout/sua-figurinha-da-copa-2026'
@@ -1691,7 +1692,8 @@
       try {
         const result = await submitSticker();
         D.stickerId = result.id;
-        D.generatedImageUrl = result.imageUrl;
+        D.generatedImageUrl = result.imageUrl || '';
+        D.generatedImageDataUrl = result.imageDataUrl || '';
         done = true;
       } catch (error) {
         clearInterval(timer);
@@ -1736,8 +1738,9 @@
     function renderFinalSticker() {
       const finalImg = document.getElementById('final-image');
       const finalFallback = document.getElementById('final-sticker');
-      if (D.generatedImageUrl) {
-        finalImg.style.backgroundImage = `url("${D.generatedImageUrl}?v=${Date.now()}")`;
+      const imageSource = D.generatedImageDataUrl || (D.generatedImageUrl ? `${D.generatedImageUrl}?v=${Date.now()}` : '');
+      if (imageSource) {
+        finalImg.style.backgroundImage = `url("${imageSource}")`;
         finalImg.classList.remove('hidden');
         finalFallback.classList.add('hidden');
         return;

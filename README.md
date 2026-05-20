@@ -16,14 +16,15 @@ Acesse `http://localhost:3100`.
 Configure as variáveis de ambiente na plataforma de deploy:
 
 ```bash
-PORT=3100
 NODE_ENV=production
 OPENAI_GENERATION_ENABLED=true
 OPENAI_API_KEY=sk-...
-OPENAI_IMAGE_MODEL=gpt-image-1
+OPENAI_IMAGE_MODEL=gpt-image-1.5
 OPENAI_IMAGE_QUALITY=high
 WATERMARK_TEXT=ESTA FIGURINHA TEM DIREITOS AUTORAIS - PREVIEW PROTEGIDO - NAO COPIAR
 ```
+
+Na Vercel nao configure `PORT`; a propria plataforma cuida do roteamento do dominio.
 
 Para desenvolvimento local sem gastar saldo:
 

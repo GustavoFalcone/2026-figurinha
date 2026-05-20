@@ -14,10 +14,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const isVercel = Boolean(process.env.VERCEL);
 const PORT = Number(process.env.PORT) || 3100;
 const publicDir = path.join(__dirname, '..', 'public');
 const uploadDir = path.join(publicDir, 'uploads');
 const outputDir = path.join(publicDir, 'output');
+const runtimeDir = isVercel ? path.join('/tmp', 'figurinha-copa') : outputDir;
 const mockupPath = path.join(publicDir, 'figurinha-brasil.jpg');
 const shirtReferencePath = path.join(publicDir, 'brasil-camisa.jpg');
 const jobs = new Map();
@@ -38,8 +40,9 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(publicDir));
 
 await Promise.all([
-  fsp.mkdir(uploadDir, { recursive: true }),
-  fsp.mkdir(outputDir, { recursive: true })
+  fsp.mkdir(runtimeDir, { recursive: true }),
+  fsp.mkdir(uploadDir, { recursive: true }).catch(() => undefined),
+  fsp.mkdir(outputDir, { recursive: true }).catch(() => undefined)
 ]);
 
 const requiredFields = ['nome', 'email', 'dia', 'mes', 'ano', 'clube', 'peso', 'altura'];
@@ -91,8 +94,8 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     }
 
     const id = crypto.randomUUID();
-    const originalPath = path.join(uploadDir, `${id}-original.jpg`);
-    const playerPath = path.join(outputDir, `${id}-player.png`);
+    const originalPath = path.join(runtimeDir, `${id}-original.jpg`);
+    const playerPath = path.join(runtimeDir, `${id}-player.png`);
     const stickerPath = path.join(outputDir, `${id}.png`);
 
     await sharp(req.file.buffer)
@@ -102,18 +105,19 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       .toFile(originalPath);
 
     const sourcePlayerPath = await generatePlayerImage(originalPath, playerPath, data);
-    await composeSticker({
+    const stickerBuffer = await composeSticker({
       id,
       data,
-      playerPath: sourcePlayerPath,
-      outputPath: stickerPath
+      playerPath: sourcePlayerPath
     });
+    const imageDataUrl = `data:image/png;base64,${stickerBuffer.toString('base64')}`;
+    if (!isVercel) await fsp.writeFile(stickerPath, stickerBuffer);
 
     const job = {
       id,
       status: 'done',
-      imageUrl: `/output/${id}.png`,
-      originalUrl: `/uploads/${id}-original.jpg`,
+      imageUrl: isVercel ? '' : `/output/${id}.png`,
+      imageDataUrl,
       usedOpenAI: sourcePlayerPath === playerPath,
       createdAt: new Date().toISOString()
     };
@@ -132,11 +136,13 @@ app.use((error, _req, res, _next) => {
   res.status(400).json({ error: error.message || 'Requisicao invalida.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n  Figurinha Copa rodando em http://localhost:${PORT}`);
-  console.log(`  OpenAI gera imagens: ${process.env.OPENAI_GENERATION_ENABLED === 'true' ? 'sim' : 'nao'}`);
-  console.log(`  HTML principal: ${path.join(publicDir, 'index.html')}\n`);
-});
+if (!isVercel) {
+  app.listen(PORT, () => {
+    console.log(`\n  Figurinha Copa rodando em http://localhost:${PORT}`);
+    console.log(`  OpenAI gera imagens: ${process.env.OPENAI_GENERATION_ENABLED === 'true' ? 'sim' : 'nao'}`);
+    console.log(`  HTML principal: ${path.join(publicDir, 'index.html')}\n`);
+  });
+}
 
 function normalizePayload(body) {
   return Object.fromEntries(
@@ -160,7 +166,7 @@ async function generatePlayerImage(originalPath, outputPath, data) {
   ].join(' ');
 
   const response = await client.images.edit({
-    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
     image: [
       fs.createReadStream(originalPath),
       fs.createReadStream(shirtReferencePath)
@@ -178,7 +184,7 @@ async function generatePlayerImage(originalPath, outputPath, data) {
   return outputPath;
 }
 
-async function composeSticker({ id, data, playerPath, outputPath }) {
+async function composeSticker({ id, data, playerPath }) {
   const poster = await sharp(mockupPath).metadata();
   const width = poster.width || 735;
   const height = poster.height || 956;
@@ -247,14 +253,14 @@ async function composeSticker({ id, data, playerPath, outputPath }) {
     .png()
     .toBuffer();
 
-  await sharp(mockupPath)
+  return sharp(mockupPath)
     .ensureAlpha()
     .composite([
       { input: player, left: playerBox.left, top: playerBox.top },
       { input: overlays, left: 0, top: 0 }
     ])
     .png({ compressionLevel: 9 })
-    .toFile(outputPath);
+    .toBuffer();
 }
 
 function buildStickerSvg({ id, data, width, height, nameBar, clubBar }) {
@@ -314,3 +320,5 @@ function escapeXml(value) {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&apos;');
 }
+
+export default app;
