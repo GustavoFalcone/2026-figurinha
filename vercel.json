@@ -1,37 +1,15 @@
 {
   "version": 2,
   "functions": {
-    "src/server.js": {
+    "api/[...path].js": {
       "maxDuration": 60,
       "includeFiles": "public/{figurinha-brasil.jpg,brasil-camisa.jpg}"
     }
   },
-  "builds": [
+  "rewrites": [
     {
-      "src": "src/server.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "public/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "src/server.js"
-    },
-    {
-      "src": "/health",
-      "dest": "src/server.js"
-    },
-    {
-      "src": "/",
-      "dest": "public/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "public/$1"
+      "source": "/health",
+      "destination": "/api/health"
     }
   ]
 }
