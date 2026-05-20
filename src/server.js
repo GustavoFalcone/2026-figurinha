@@ -20,8 +20,7 @@ const publicDir = path.join(__dirname, '..', 'public');
 const uploadDir = path.join(publicDir, 'uploads');
 const outputDir = path.join(publicDir, 'output');
 const runtimeDir = isVercel ? path.join('/tmp', 'figurinha-copa') : outputDir;
-const mockupPath = path.join(publicDir, 'figurinha-brasil.jpg');
-const shirtReferencePath = path.join(publicDir, 'brasil-camisa.jpg');
+const mockupPath = path.join(publicDir, 'raphinha.png');
 const regularFontPath = path.join(publicDir, 'fonts', 'LiberationSans-Regular.ttf');
 const boldFontPath = path.join(publicDir, 'fonts', 'LiberationSans-Bold.ttf');
 const jobs = new Map();
@@ -73,7 +72,6 @@ app.get(['/health', '/api/health'], (_req, res) => {
     openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
     assets: {
       mockup: fs.existsSync(mockupPath),
-      shirtReference: fs.existsSync(shirtReferencePath),
       regularFont: fs.existsSync(regularFontPath),
       boldFont: fs.existsSync(boldFontPath)
     },
@@ -172,39 +170,52 @@ async function generatePlayerImage(originalPath, outputPath, data) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
   if (!canUseOpenAI) return originalPath;
   await assertReadable(originalPath, 'SOURCE_IMAGE_MISSING');
-  await assertReadable(shirtReferencePath, 'SHIRT_REFERENCE_MISSING');
+  await assertReadable(mockupPath, 'MOCKUP_MISSING');
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  
   const sourceUpload = await toFile(
     await fsp.readFile(originalPath),
     'source.png',
     { type: 'image/png' }
   );
-  const shirtReferencePng = await sharp(shirtReferencePath)
-    .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-    .png({ compressionLevel: 9 })
-    .toBuffer();
-  const shirtUpload = await toFile(
-    shirtReferencePng,
-    'brasil-camisa.png',
+  
+  const mockupUpload = await toFile(
+    await fsp.readFile(mockupPath),
+    'mockup.png', 
     { type: 'image/png' }
   );
-  const prompt = [
-    'Use the first image only as identity reference for the person face. Do not reuse the original photo background.',
-    'Create a clean collectible football sticker player portrait, like a World Cup sticker.',
-    'Keep the same face identity, hair, skin tone, age impression and expression from the uploaded person.',
-    'Use the second image as the official Brazil shirt reference: yellow Brazil football jersey, green collar/details, crest placement and athletic pose.',
-    'The output must be a single person only, from thighs or waist up, centered, crisp edges, transparent background.',
-    'Do not create any sticker frame, card, border, white rectangle, label, flag badge, caption, number, nameplate, text, watermark, or background.',
-    'Only the person wearing the Brazil jersey should be visible.',
-    `Player name for context: ${data.nome}. Club for context: ${data.clube}.`
-  ].join(' ');
+
+  const structuredPrompt = JSON.stringify({
+    task: "face_swap_on_mockup",
+    instructions: {
+      step_1: "Identify the face in the SOURCE image (first image)",
+      step_2: "Identify the face region in the MOCKUP image (second image) - from top of head to middle of neck",
+      step_3: "Replace ONLY the face area in the mockup with the face from source image",
+      step_4: "Keep everything else from mockup EXACTLY the same: body, jersey, arms, background, lighting, pose, shadows",
+      step_5: "Blend the edges of the new face seamlessly into the neck area of the mockup",
+      step_6: "Match skin tone, lighting direction, and color temperature between source face and mockup body"
+    },
+    constraints: [
+      "Do NOT change the body, pose, or clothing",
+      "Do NOT change the background",
+      "Do NOT add any text, logos, or watermarks",
+      "Do NOT change image dimensions or aspect ratio",
+      "The result must look like a natural photograph",
+      "Only the facial area should be modified",
+      "Preserve the exact position and angle of the head"
+    ],
+    output: {
+      format: "photorealistic",
+      background: "same as mockup",
+      quality: "maximum detail and natural blending"
+    }
+  });
 
   const response = await client.images.edit({
     model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
-    image: [sourceUpload, shirtUpload],
-    prompt,
-    background: 'transparent',
+    image: [sourceUpload, mockupUpload],
+    prompt: structuredPrompt,
     size: '1024x1024',
     quality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
     n: 1
@@ -220,53 +231,35 @@ async function composeSticker({ id, data, playerPath }) {
   await assertReadable(mockupPath, 'MOCKUP_MISSING');
   await assertReadable(playerPath, 'PLAYER_IMAGE_MISSING');
   const poster = await sharp(mockupPath).metadata();
-  const width = poster.width || 735;
-  const height = poster.height || 956;
+  const width = poster.width || 720;
+  const height = poster.height || 960;
+  
   const playerBox = box(width, height, {
-    left: 0.07,
-    top: 0.33,
-    width: 0.53,
-    height: 0.52
+    left: 0.09,
+    top: 0.28,
+    width: 0.45,
+    height: 0.48
   });
   const nameBar = box(width, height, {
-    left: 0.052,
-    top: 0.833,
-    width: 0.714,
-    height: 0.067
+    left: 0.04,
+    top: 0.81,
+    width: 0.75,
+    height: 0.065
   });
   const clubBar = box(width, height, {
-    left: 0.052,
-    top: 0.941,
-    width: 0.62,
-    height: 0.043
+    left: 0.04,
+    top: 0.91,
+    width: 0.65,
+    height: 0.05
   });
 
-  const cleanedPlayer = await removeNearWhiteBackground(playerPath);
-  const fittedPlayer = await sharp(cleanedPlayer)
+  const fittedPlayer = await sharp(playerPath)
     .rotate()
     .resize(playerBox.width, playerBox.height, {
-      fit: 'contain',
-      position: 'south',
+      fit: 'cover',
+      position: 'center',
       background: { r: 0, g: 0, b: 0, alpha: 0 }
     })
-    .png()
-    .toBuffer();
-  const fittedMeta = await sharp(fittedPlayer).metadata();
-  const player = await sharp({
-    create: {
-      width: playerBox.width,
-      height: playerBox.height,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 }
-    }
-  })
-    .composite([
-      {
-        input: fittedPlayer,
-        left: Math.max(0, Math.round((playerBox.width - (fittedMeta.width || playerBox.width)) / 2)),
-        top: Math.max(0, playerBox.height - (fittedMeta.height || playerBox.height))
-      }
-    ])
     .png()
     .toBuffer();
 
@@ -291,7 +284,7 @@ async function composeSticker({ id, data, playerPath }) {
   return sharp(mockupPath)
     .ensureAlpha()
     .composite([
-      { input: player, left: playerBox.left, top: playerBox.top },
+      { input: fittedPlayer, left: playerBox.left, top: playerBox.top },
       { input: overlays, left: 0, top: 0 }
     ])
     .png({ compressionLevel: 9 })

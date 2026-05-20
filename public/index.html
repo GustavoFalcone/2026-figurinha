@@ -1502,7 +1502,7 @@
           <span class="sorteio-badge-text">Sorteio <strong>R$ 1.000</strong> para compradores</span>
         </div>
         
-        <div class="price">R$12,90</div>
+        <div class="price">R$14,90</div>
         <button class="btn btn-primary" onclick="checkout()" aria-label="Ir para pagamento da figurinha">Receber minha figurinha</button>
         <div class="share-row">
           <button class="btn-share" onclick="shareWhatsApp()" aria-label="Compartilhar no WhatsApp">
@@ -1814,35 +1814,47 @@
       document.getElementById('l2-pct').textContent = '0%';
       document.getElementById('l2pct-top').textContent = '0%';
       renderSticker('preview-sticker');
+      
       let value = 0;
       let done = false;
+      let startTime = Date.now();
       const captions = [
         ['Enviando dados', 'Renderizacao segura'],
-        ['Aplicando foto no mockup', 'Composicao da figurinha'],
-        ['Gravando marca d agua', 'Protecao do preview'],
-        ['Finalizando arquivo', 'Arte quase pronta']
+        ['Analisando rosto', 'Preparando troca facial'],
+        ['Aplicando no mockup', 'Encaixando na figurinha'],
+        ['Gravando dados', 'Nome, clube e estatisticas'],
+        ['Finalizando marca dagua', 'Protegendo preview']
       ];
       let captionIndex = 0;
 
       const timer = addInterval(() => {
-        captionIndex = Math.min(Math.floor(value / 28), captions.length - 1);
+        captionIndex = Math.min(Math.floor(value / 22), captions.length - 1);
         document.getElementById('l2-label').textContent = captions[captionIndex][0];
         document.getElementById('l2-chip').textContent = captions[captionIndex][1];
+        
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const timeStr = `${elapsed}s`;
 
-        value += done ? 9 : Math.random() * 4.5 + 1.4;
-        if (!done && value > 91) value = 91;
-        if (done && value >= 100) {
-          value = 100;
-          clearInterval(timer);
-          timers.delete(timer);
-          addTimeout(() => go('s7'), 520);
+        if (!done) {
+          value += Math.random() * 3 + 0.8;
+          if (value > 95) value = 95;
+        } else {
+          value += (100 - value) * 0.15 + 2;
+          if (value >= 100) {
+            value = 100;
+            clearInterval(timer);
+            timers.delete(timer);
+            addTimeout(() => go('s7'), 400);
+          }
         }
+        
         const pct = `${Math.round(value)}%`;
         document.getElementById('l2-bar').style.width = `${value}%`;
         document.getElementById('l2bar-top').style.width = `${value}%`;
         document.getElementById('l2-pct').textContent = pct;
         document.getElementById('l2pct-top').textContent = pct;
-      }, 130);
+        document.getElementById('l2-sub').textContent = `Gerando figurinha... ${timeStr} decorridos`;
+      }, 100);
 
       try {
         const result = await submitSticker();
