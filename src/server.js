@@ -25,6 +25,7 @@ const regularFontPath = path.join(publicDir, 'fonts', 'LiberationSans-Regular.tt
 const boldFontPath = path.join(publicDir, 'fonts', 'LiberationSans-Bold.ttf');
 const jobs = new Map();
 const isProduction = process.env.NODE_ENV === 'production';
+const generationTimeoutMs = Number(process.env.OPENAI_GENERATION_TIMEOUT_MS) || 90000;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -103,13 +104,12 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     const mockupWidth = mockupMeta.width;
     const mockupHeight = mockupMeta.height;
 
-    // 3. Recortar APENAS a área do rosto do mockup (região fixa do rosto)
-    // Raphinha.png: rosto fica aproximadamente em 30-50% horizontal, 8-28% vertical
+    // 3. Recortar somente a região da cabeça do template.
     const faceRegion = {
-      left: Math.round(mockupWidth * 0.28),
-      top: Math.round(mockupHeight * 0.06),
-      width: Math.round(mockupWidth * 0.44),
-      height: Math.round(mockupHeight * 0.32)
+      left: Math.round(mockupWidth * 0.25),
+      top: Math.round(mockupHeight * 0.04),
+      width: Math.round(mockupWidth * 0.50),
+      height: Math.round(mockupHeight * 0.375)
     };
 
     await sharp(mockupPath)
@@ -143,7 +143,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       status: 'done',
       imageUrl: isVercel ? '' : `/output/${id}.png`,
       imageDataUrl,
-      usedOpenAI: sourcePlayerPath === faceCropPath,
+      usedOpenAI: sourcePlayerPath === faceResultPath,
       createdAt: new Date().toISOString()
     };
     jobs.set(id, job);
@@ -191,7 +191,10 @@ async function generateFaceOnly(sourcePath, faceCropPath, outputPath, data) {
   await assertReadable(sourcePath, 'SOURCE_IMAGE_MISSING');
   await assertReadable(faceCropPath, 'FACE_CROP_MISSING');
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: generationTimeoutMs
+  });
 
   // Upload da foto do usuário (referência de identidade)
   const sourceUpload = await toFile(
@@ -208,30 +211,29 @@ async function generateFaceOnly(sourcePath, faceCropPath, outputPath, data) {
   );
 
   // Prompt CIRÚRGICO - troca APENAS o rosto
-  const surgicalPrompt = `CIRGURICAL FACE SWAP TASK - VERY IMPORTANT RULES:
+  const surgicalPrompt = `SURGICAL TEMPLATE EDIT - DO NOT CREATE A NEW STICKER.
 
 INPUT: Two images.
-Image 1 (face-reference.png): A photo of a person - use ONLY for face identity.
-Image 2 (face-to-replace.png): A cropped face region from a football sticker.
+Image 1 (face-reference.png): user photo, use only as identity reference.
+Image 2 (face-to-replace.png): fixed crop from the original football sticker template.
 
 YOUR TASK:
-1. Look at the FACE in Image 1 (reference) - note the identity, features, skin tone.
-2. Look at Image 2 (the crop) - this is the TARGET region.
-3. REPLACE the face in Image 2 with the face identity from Image 1.
-4. KEEP the EXACT same:
+1. Return Image 2 edited in place.
+2. Replace only the visible face/head identity in Image 2 with the person from Image 1.
+3. Preserve all non-face template pixels as much as possible.
+4. Keep the exact same:
    - Head angle and pose from Image 2
    - Lighting direction and intensity from Image 2  
-   - Skin tone MATCHED to Image 2's surrounding skin
-   - Hair style from Image 2 (do NOT import hair from Image 1)
+   - Neck/collar/uniform from Image 2
    - Background color/gradient from Image 2
-   - Image dimensions of Image 2
+   - Layout, logos, borders, graphics and crop from Image 2
 
 CRITICAL CONSTRAINTS:
-- Output MUST have EXACTLY the same dimensions as Image 2
-- Output MUST keep the EXACT same background as Image 2
-- ONLY the facial features (eyes, nose, mouth, cheeks) should change
-- Do NOT add any text, borders, frames, or decorations
-- Do NOT change the head shape or angle
+- Do not create a new sticker.
+- Do not add text, borders, frames, decorations, bars, logos, shapes or extra graphics.
+- Do not change the body, uniform, pose, framing, background or existing template design.
+- Do not show two heads or two faces.
+- Only the identity of the face/head may change.
 - Blend edges seamlessly so no seam is visible
 - The face should look like it naturally belongs in the sticker
 
@@ -260,27 +262,7 @@ async function composeSticker({ id, data, faceResultPath, faceRegion, mockupWidt
   const width = mockupWidth;
   const height = mockupHeight;
 
-  // Posições dos textos (percentuais do mockup raphinha.png)
-  const nameBar = box(width, height, {
-    left: 0.04,
-    top: 0.80,
-    width: 0.92,
-    height: 0.07
-  });
-
-  const detailsBar = box(width, height, {
-    left: 0.04,
-    top: 0.86,
-    width: 0.92,
-    height: 0.05
-  });
-
-  const clubBar = box(width, height, {
-    left: 0.04,
-    top: 0.91,
-    width: 0.92,
-    height: 0.06
-  });
+  const textLayout = getTemplateTextLayout(width, height);
 
   // Redimensionar o rosto modificado para caber exatamente na região recortada
   const fittedFace = await sharp(faceResultPath)
@@ -315,8 +297,7 @@ async function composeSticker({ id, data, faceResultPath, faceRegion, mockupWidt
     .png()
     .toBuffer();
 
-  // Gerar SVG com textos
-  const svgContent = buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar });
+  const svgContent = buildStickerSvg({ id, data, width, height, textLayout });
 
   // Compor tudo: mockup + rosto modificado + textos
   return sharp(mockupPath)
@@ -338,7 +319,7 @@ async function composeSticker({ id, data, faceResultPath, faceRegion, mockupWidt
     .toBuffer();
 }
 
-function buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar }) {
+function buildStickerSvg({ id, data, width, height, textLayout }) {
   const birthDate = `${data.dia}-${months[data.mes] || data.mes}-${data.ano}`;
   const heightMeters = (Number(data.altura) / 100).toFixed(2).replace('.', ',');
   const safeName = escapeXml(data.nome.toUpperCase()).slice(0, 26);
@@ -359,9 +340,9 @@ function buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar
   const boldFont = fontDataUri(boldFontPath);
 
   const fontSize = {
-    name: Math.round(height * 0.052),
-    details: Math.round(height * 0.026),
-    club: Math.round(height * 0.030),
+    name: textLayout.font.name,
+    details: textLayout.font.details,
+    club: textLayout.font.club,
     wm: Math.round(height * 0.028),
     wmSmall: Math.round(height * 0.018)
   };
@@ -378,10 +359,28 @@ function buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar
       <!-- Marca d'água diagonal -->
       <g transform="rotate(-25 ${width / 2} ${height / 2})">${wmLines}</g>
 
+      <!-- Recria apenas as faixas originais para apagar os dados antigos antes do novo texto -->
+      <rect
+        x="${textLayout.mainBar.left}"
+        y="${textLayout.mainBar.top}"
+        width="${textLayout.mainBar.width}"
+        height="${textLayout.mainBar.height}"
+        rx="${textLayout.mainBar.radius}"
+        fill="${textLayout.barColor}"
+      />
+      <rect
+        x="${textLayout.clubBar.left}"
+        y="${textLayout.clubBar.top}"
+        width="${textLayout.clubBar.width}"
+        height="${textLayout.clubBar.height}"
+        rx="${textLayout.clubBar.radius}"
+        fill="${textLayout.barColor}"
+      />
+
       <!-- Nome do jogador -->
-      <text 
-        x="${nameBar.left + nameBar.width / 2}" 
-        y="${nameBar.top + nameBar.height * 0.65}" 
+      <text
+        x="${textLayout.name.x}"
+        y="${textLayout.name.y}"
         font-family="StickerFont, sans-serif" 
         font-size="${fontSize.name}px" 
         font-weight="700" 
@@ -391,9 +390,9 @@ function buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar
       >${safeName}</text>
 
       <!-- Detalhes: data | altura | peso -->
-      <text 
-        x="${detailsBar.left + detailsBar.width / 2}" 
-        y="${detailsBar.top + detailsBar.height * 0.65}" 
+      <text
+        x="${textLayout.details.x}"
+        y="${textLayout.details.y}"
         font-family="StickerFont, sans-serif" 
         font-size="${fontSize.details}px" 
         font-weight="400" 
@@ -404,9 +403,9 @@ function buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar
       >${details}</text>
 
       <!-- Clube -->
-      <text 
-        x="${clubBar.left + clubBar.width / 2}" 
-        y="${clubBar.top + clubBar.height * 0.65}" 
+      <text
+        x="${textLayout.club.x}"
+        y="${textLayout.club.y}"
         font-family="StickerFont, sans-serif" 
         font-size="${fontSize.club}px" 
         font-weight="700" 
@@ -431,12 +430,31 @@ function buildStickerSvg({ id, data, width, height, nameBar, detailsBar, clubBar
   `;
 }
 
-function box(width, height, ratio) {
+function getTemplateTextLayout(width, height) {
+  const sx = width / 720;
+  const sy = height / 960;
   return {
-    left: Math.round(width * ratio.left),
-    top: Math.round(height * ratio.top),
-    width: Math.round(width * ratio.width),
-    height: Math.round(height * ratio.height)
+    barColor: '#1e8689',
+    mainBar: scaleBox({ left: 35, top: 804, width: 518, height: 91, radius: 38 }, sx, sy),
+    clubBar: scaleBox({ left: 35, top: 906, width: 452, height: 43, radius: 22 }, sx, sy),
+    name: { x: Math.round(294 * sx), y: Math.round(852 * sy) },
+    details: { x: Math.round(294 * sx), y: Math.round(881 * sy) },
+    club: { x: Math.round(261 * sx), y: Math.round(935 * sy) },
+    font: {
+      name: Math.round(42 * sy),
+      details: Math.round(29 * sy),
+      club: Math.round(27 * sy)
+    }
+  };
+}
+
+function scaleBox(rect, sx, sy) {
+  return {
+    left: Math.round(rect.left * sx),
+    top: Math.round(rect.top * sy),
+    width: Math.round(rect.width * sx),
+    height: Math.round(rect.height * sy),
+    radius: Math.round(rect.radius * Math.min(sx, sy))
   };
 }
 

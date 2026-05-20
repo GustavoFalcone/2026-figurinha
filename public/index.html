@@ -1815,58 +1815,55 @@
       document.getElementById('l2pct-top').textContent = '0%';
       renderSticker('preview-sticker');
 
-      let progress = 0;
-      let startTime = Date.now();
+      const startTime = Date.now();
       let requestDone = false;
       let requestFailed = false;
+      let timedOut = false;
       let failMessage = '';
       const MAX_TIME = 100000; // 100 segundos máximo
-      let requestPromise = null;
+      const controller = new AbortController();
 
-      // Fases do carregamento (tempo acumulado em ms, progresso alvo)
       const phases = [
-        { time: 0,    target: 5,   label: 'Enviando dados',        chip: 'Conexao segura' },
-        { time: 3000, target: 15,  label: 'Processando foto',      chip: 'Identificando rosto' },
-        { time: 8000, target: 30,  label: 'Analisando rosto',      chip: 'Mapeando caracteristicas' },
-        { time: 15000, target: 50, label: 'Gerando novo rosto',    chip: 'Troca facial via IA' },
-        { time: 30000, target: 70, label: 'Integrando na figurinha', chip: 'Composicao do mockup' },
-        { time: 45000, target: 85, label: 'Aplicando seus dados',  chip: 'Nome, clube, estatisticas' },
-        { time: 60000, target: 92, label: 'Finalizando',           chip: 'Renderizando marca dagua' },
-        { time: 80000, target: 97, label: 'Quase pronto',          chip: 'Ultimos ajustes' }
+        { time: 0, label: 'Enviando dados', chip: 'Conexao segura' },
+        { time: 7000, label: 'Preparando imagem', chip: 'Validando arquivo' },
+        { time: 14000, label: 'Analisando rosto', chip: 'Mapeando caracteristicas' },
+        { time: 26000, label: 'Gerando novo rosto', chip: 'Troca facial via IA' },
+        { time: 42000, label: 'Integrando na figurinha', chip: 'Composicao do mockup' },
+        { time: 62000, label: 'Aplicando seus dados', chip: 'Nome, clube, estatisticas' },
+        { time: 82000, label: 'Finalizando preview', chip: 'Renderizando marca dagua' }
       ];
 
-      function getCurrentPhase(elapsed) {
-        let current = phases[0];
-        for (const phase of phases) {
-          if (elapsed >= phase.time) current = phase;
-        }
-        return current;
+      function phaseFor(elapsed) {
+        return phases.reduce((current, phase) => elapsed >= phase.time ? phase : current, phases[0]);
       }
 
-      function interpolateProgress(elapsed) {
+      function progressFor(elapsed) {
         if (requestDone) return 100;
-
-        const phase = getCurrentPhase(elapsed);
-        const nextPhaseIndex = phases.findIndex(p => p.time === phase.time) + 1;
-        const nextPhase = phases[nextPhaseIndex] || { time: MAX_TIME, target: 99 };
-
-        if (elapsed < phase.time) return phase.target;
-
-        const phaseDuration = nextPhase.time - phase.time;
-        const elapsedInPhase = elapsed - phase.time;
-        const phaseProgress = Math.min(elapsedInPhase / phaseDuration, 1);
-
-        // Ease in-out para progresso suave
-        const eased = phaseProgress < 0.5
-          ? 2 * phaseProgress * phaseProgress
-          : 1 - Math.pow(-2 * phaseProgress + 2, 2) / 2;
-
-        const range = nextPhase.target - phase.target;
-        return phase.target + (range * eased);
+        if (elapsed < 30000) return Math.floor(elapsed / 1200);
+        if (elapsed < 70000) return Math.floor(25 + ((elapsed - 30000) / 900));
+        return Math.min(99, Math.floor(69 + ((elapsed - 70000) / 1000)));
       }
 
-      // Iniciar request em paralelo
-      requestPromise = submitSticker()
+      function setProgress(pct) {
+        document.getElementById('l2-bar').style.width = `${pct}%`;
+        document.getElementById('l2bar-top').style.width = `${pct}%`;
+        document.getElementById('l2-pct').textContent = `${pct}%`;
+        document.getElementById('l2pct-top').textContent = `${pct}%`;
+      }
+
+      function addRetryButton() {
+        const card = document.querySelector('#s6 .card');
+        if (!card || card.querySelector('[data-retry]')) return;
+        const retry = document.createElement('button');
+        retry.className = 'btn btn-primary';
+        retry.style.marginTop = '18px';
+        retry.textContent = 'Tentar novamente';
+        retry.dataset.retry = 'true';
+        retry.onclick = () => go('s6');
+        card.appendChild(retry);
+      }
+
+      const requestPromise = submitSticker(controller.signal)
         .then(result => {
           D.stickerId = result.id;
           D.generatedImageUrl = result.imageUrl || '';
@@ -1874,89 +1871,62 @@
           requestDone = true;
         })
         .catch(error => {
+          if (timedOut && error.name === 'AbortError') return;
           requestFailed = true;
           failMessage = error.message || 'Nao foi possivel gerar a figurinha. Tente novamente.';
         });
 
-      // Timer da barra de progresso
       const timer = addInterval(() => {
         const elapsed = Date.now() - startTime;
 
-        // Timeout de 100 segundos
         if (elapsed > MAX_TIME && !requestDone) {
+          timedOut = true;
+          controller.abort();
           clearInterval(timer);
           timers.delete(timer);
           document.getElementById('l2-sub').textContent = 'Tempo esgotado. A geracao demorou mais que o esperado.';
           document.getElementById('l2-label').textContent = 'Timeout';
           document.getElementById('l2-chip').textContent = 'Tente novamente';
-          const card = document.querySelector('#s6 .card');
-          const retry = document.createElement('button');
-          retry.className = 'btn btn-primary';
-          retry.style.marginTop = '18px';
-          retry.textContent = 'Tentar novamente';
-          retry.onclick = () => go('s6');
-          if (!card.querySelector('[data-retry]')) {
-            retry.dataset.retry = 'true';
-            card.appendChild(retry);
-          }
+          setProgress(99);
+          addRetryButton();
           return;
         }
 
-        // Se deu erro, mostrar erro
         if (requestFailed) {
           clearInterval(timer);
           timers.delete(timer);
           document.getElementById('l2-sub').textContent = failMessage;
           document.getElementById('l2-label').textContent = 'Erro na geracao';
           document.getElementById('l2-chip').textContent = 'Revise os dados';
-          document.getElementById('l2-bar').style.width = '0%';
-          document.getElementById('l2bar-top').style.width = '0%';
-          document.getElementById('l2-pct').textContent = '0%';
-          document.getElementById('l2pct-top').textContent = '0%';
-          const card = document.querySelector('#s6 .card');
-          const retry = document.createElement('button');
-          retry.className = 'btn btn-primary';
-          retry.style.marginTop = '18px';
-          retry.textContent = 'Tentar novamente';
-          retry.onclick = () => go('s6');
-          if (!card.querySelector('[data-retry]')) {
-            retry.dataset.retry = 'true';
-            card.appendChild(retry);
-          }
+          setProgress(0);
+          addRetryButton();
           return;
         }
 
-        // Calcular progresso
-        progress = interpolateProgress(elapsed);
-        if (requestDone && progress < 98) progress = 98;
-        if (requestDone && elapsed > 500) progress = 100;
-
-        // Atualizar UI
-        const phase = getCurrentPhase(elapsed);
-        const pct = Math.round(progress);
+        const pct = progressFor(elapsed);
+        const phase = phaseFor(elapsed);
         const elapsedSec = Math.floor(elapsed / 1000);
 
         document.getElementById('l2-label').textContent = phase.label;
         document.getElementById('l2-chip').textContent = phase.chip;
-        document.getElementById('l2-bar').style.width = `${pct}%`;
-        document.getElementById('l2bar-top').style.width = `${pct}%`;
-        document.getElementById('l2-pct').textContent = `${pct}%`;
-        document.getElementById('l2pct-top').textContent = `${pct}%`;
+        setProgress(pct);
         document.getElementById('l2-sub').textContent = `Gerando figurinha... ${elapsedSec}s decorridos`;
 
-        // Se completo, ir para tela s7
-        if (requestDone && progress >= 100) {
+        if (requestDone) {
           clearInterval(timer);
           timers.delete(timer);
-          addTimeout(() => go('s7'), 300);
+          document.getElementById('l2-label').textContent = 'Preview pronto';
+          document.getElementById('l2-chip').textContent = 'Geracao concluida';
+          document.getElementById('l2-sub').textContent = 'Figurinha pronta. Abrindo preview...';
+          setProgress(100);
+          addTimeout(() => go('s7'), 450);
         }
-      }, 100);
+      }, 500);
 
-      // Aguardar request (não bloquear a UI)
       await requestPromise;
     }
 
-    async function submitSticker() {
+    async function submitSticker(signal) {
       const form = new FormData();
       form.append('photo', D.photoFile);
       ['nome', 'email', 'dia', 'mes', 'ano', 'clube', 'peso', 'altura'].forEach(key => {
@@ -1965,7 +1935,8 @@
 
       const response = await fetch('/api/stickers', {
         method: 'POST',
-        body: form
+        body: form,
+        signal
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
