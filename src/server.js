@@ -419,6 +419,14 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
   );
   const jobMark = escapeXml(id.slice(0, 8).toUpperCase());
 
+  const fontSize = {
+    name: textLayout.font.name,
+    details: textLayout.font.details,
+    club: textLayout.font.club,
+    wm: Math.round(height * 0.028),
+    wmSmall: Math.round(height * 0.018)
+  };
+
   // Linhas de marca d'água diagonais (com estilos inline para garantir a renderização no SVG)
   const wmLines = Array.from({ length: 18 }, (_, row) => {
     const y = Math.round(-height * 0.15 + row * height * 0.085);
@@ -427,14 +435,6 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
 
   const regularFont = fontDataUri(regularFontPath);
   const boldFont = fontDataUri(boldFontPath);
-
-  const fontSize = {
-    name: textLayout.font.name,
-    details: textLayout.font.details,
-    club: textLayout.font.club,
-    wm: Math.round(height * 0.028),
-    wmSmall: Math.round(height * 0.018)
-  };
 
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
