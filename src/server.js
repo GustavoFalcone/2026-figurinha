@@ -244,7 +244,41 @@ function buildEditPrompt(data) {
   const nameStr = (data.nome || '').toUpperCase();
   const clubStr = (data.clube || '').toUpperCase();
 
-  return `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
+  return [
+    'You are editing a Panini-style soccer World Cup 2026 trading card.',
+    '',
+    'Image 1: the reference trading card template (the existing sticker with a player on a Brazil national team kit).',
+    'Image 2: the face reference photo of the new person who must replace the player on the card.',
+    '',
+    'TASK:',
+    `Re-render Image 1 as a complete, single trading card, replacing ONLY the player's face/head with the face from Image 2, and replacing ONLY the textual stats with the values listed below. Keep the result as ONE single trading card, fully filling the output canvas.`,
+    '',
+    'PRESERVE (these must stay IDENTICAL to Image 1):',
+    "- Overall card layout, framing, proportions, aspect ratio and composition.",
+    "- The teal/cyan rounded outer card border.",
+    "- The large green number \"23\" decoration on the background.",
+    "- The yellow Brazilian national team jersey with the green CBF crest and \"BRASIL\" label, the Nike logo, and the star pattern.",
+    "- The small FIFA World Cup trophy icon in the upper-right corner.",
+    "- The Brazil flag and the vertical \"FIFA WORLD CUP 26\" / event branding on the right side.",
+    "- The \"PANINI\" red logo at the bottom-right.",
+    "- The dark teal info bars at the bottom that hold the player name and stats.",
+    "- The lighting, colors, paper texture and overall finish of the original card.",
+    "- The person's neckline, shoulders and how they meet the jersey (no floating head, natural anatomy).",
+    '',
+    'CHANGE (apply ONLY these edits):',
+    '1. Replace the player\'s face and head with the face from Image 2. Match skin tone, hair, expression naturally to the body. Preserve the identity of the person in Image 2 (same facial features, same proportions, same hairline). Photoreal integration with the body, no cut-out look.',
+    `2. Replace the large player surname text in the info bar with: "${nameStr}".`,
+    `3. Replace the birth-date / height / weight line with: "${birthDate} | ${heightMeters} | ${weightStr}".`,
+    `4. Replace the club name in the lower bar with: "${clubStr}".`,
+    '',
+    'TYPOGRAPHY:',
+    '- Render every replaced text VERBATIM, in white, in the same bold sans-serif style as the original card, with the same size and placement.',
+    '- No extra words, no duplicate text, no watermark, no extra logos.',
+    '',
+    'OUTPUT:',
+    '- A single, complete Panini-style trading card, photoreal, sharp, filling the entire output canvas.',
+    '- Do NOT output a card-inside-a-card, do NOT output just a face crop, do NOT output a collage.',
+  ].join('\n');
 }
 
 // Envia a FIGURINHA COMPLETA (raphinha.png) + a FOTO DO USUARIO para a OpenAI,
