@@ -384,21 +384,11 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
   // Linhas de marca d'água diagonais (com estilos inline para garantir a renderização no SVG)
   const wmLines = Array.from({ length: 18 }, (_, row) => {
     const y = Math.round(-height * 0.15 + row * height * 0.085);
-    return `<text x="${Math.round(-width * 0.6)}" y="${y}" fill="#FFFFFF" fill-opacity="0.18" font-family="StickerFont, Arial, Helvetica, sans-serif" font-size="${fontSize.wm}px" font-weight="700" letter-spacing="2px">${watermark} • ${jobMark}</text>`;
+    return `<text x="${Math.round(-width * 0.6)}" y="${y}" fill="#FFFFFF" fill-opacity="0.18" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize.wm}px" font-weight="700" letter-spacing="2px">${watermark} • ${jobMark}</text>`;
   }).join('');
-
-  const regularFont = fontDataUri(regularFontPath);
-  const boldFont = fontDataUri(boldFontPath);
 
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <style>
-          @font-face { font-family: "StickerFont"; src: url("${regularFont}") format("truetype"); font-weight: 400; }
-          @font-face { font-family: "StickerFont"; src: url("${boldFont}") format("truetype"); font-weight: 700; }
-        </style>
-      </defs>
-
       <!-- Marca d'água diagonal -->
       <g transform="rotate(-25 ${width / 2} ${height / 2})">${wmLines}</g>
 
@@ -424,7 +414,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text
         x="${textLayout.name.x}"
         y="${textLayout.name.y}"
-        font-family="StickerFont, Arial, Helvetica, sans-serif" 
+        font-family="Arial, Helvetica, sans-serif" 
         font-size="${fontSize.name}px" 
         font-weight="700" 
         fill="#FFFFFF" 
@@ -436,7 +426,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text
         x="${textLayout.details.x}"
         y="${textLayout.details.y}"
-        font-family="StickerFont, Arial, Helvetica, sans-serif" 
+        font-family="Arial, Helvetica, sans-serif" 
         font-size="${fontSize.details}px" 
         font-weight="400" 
         fill="#FFFFFF" 
@@ -449,7 +439,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text
         x="${textLayout.club.x}"
         y="${textLayout.club.y}"
-        font-family="StickerFont, Arial, Helvetica, sans-serif" 
+        font-family="Arial, Helvetica, sans-serif" 
         font-size="${fontSize.club}px" 
         font-weight="700" 
         fill="#FFFFFF" 
@@ -461,7 +451,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text 
         x="${width * 0.5}" 
         y="${height * 0.72}" 
-        font-family="StickerFont, Arial, Helvetica, sans-serif" 
+        font-family="Arial, Helvetica, sans-serif" 
         font-size="${fontSize.wmSmall}px" 
         font-weight="700" 
         fill="#FFFFFF" 
