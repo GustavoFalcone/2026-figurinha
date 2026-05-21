@@ -61,7 +61,7 @@ app.get(['/health', '/api/health'], (_req, res) => {
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     openaiGenerationEnabled: process.env.OPENAI_GENERATION_ENABLED === 'true',
     openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
-    openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
+    openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'low',
     assets: {
       mockup: fs.existsSync(mockupPath),
       regularFont: fs.existsSync(regularFontPath),
@@ -79,31 +79,48 @@ app.get('/api/stickers/:id', (req, res) => {
 });
 
 app.post('/api/stickers', upload.single('photo'), async (req, res) => {
+  const startTime = Date.now();
+  console.log(`[STSTICKER_GEN] [${new Date().toISOString()}] Nova requisicao de figurinha recebida.`);
   try {
-    if (!req.file) { res.status(400).json({ error: 'Envie a foto do craque.' }); return; }
+    if (!req.file) {
+      console.warn('[STSTICKER_GEN] Erro: Foto do craque nao enviada.');
+      res.status(400).json({ error: 'Envie a foto do craque.' });
+      return;
+    }
 
     const data = normalizePayload(req.body);
+    console.log('[STSTICKER_GEN] Dados recebidos:', JSON.stringify(data));
+
     const missing = requiredFields.filter(field => !data[field]);
-    if (missing.length) { res.status(400).json({ error: `Campos obrigatorios: ${missing.join(', ')}.` }); return; }
+    if (missing.length) {
+      console.warn(`[STSTICKER_GEN] Erro: Campos obrigatorios ausentes: ${missing.join(', ')}`);
+      res.status(400).json({ error: `Campos obrigatorios: ${missing.join(', ')}.` });
+      return;
+    }
 
     const id = crypto.randomUUID();
     const originalPath = path.join(runtimeDir, `${id}-original.png`);
     const faceSwappedPath = path.join(runtimeDir, `${id}-face-swapped.png`);
     const stickerPath = path.join(outputDir, `${id}.png`);
 
+    console.log(`[STSTICKER_GEN] ID Gerado: ${id}`);
+
     // 1. Salvar foto do usuário
+    const savePhotoStart = Date.now();
     await sharp(req.file.buffer)
       .rotate()
       .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
       .png({ compressionLevel: 9 })
       .toFile(originalPath);
+    console.log(`[STSTICKER_GEN] Foto do usuario salva em ${Date.now() - savePhotoStart}ms`);
 
-    // 2. Obter metadados do mockup para calibrar posições de texto
+    // 2. Obter metadados do mockup
     const mockupMeta = await sharp(mockupPath).metadata();
     const mockupWidth = mockupMeta.width;
     const mockupHeight = mockupMeta.height;
+    console.log(`[STSTICKER_GEN] Mockup metadata carregado. Largura: ${mockupWidth}px, Altura: ${mockupHeight}px`);
 
-    // 3. Recortar somente a região da cabeça do template para enviar à IA
+    // 3. Recortar região da cabeça do template
     const faceRegion = {
       left: Math.round(mockupWidth * 0.25),
       top: Math.round(mockupHeight * 0.04),
@@ -114,20 +131,26 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     const faceCropPath = path.join(runtimeDir, `${id}-face-crop.png`);
     const faceSwappedCropPath = path.join(runtimeDir, `${id}-face-swapped.png`);
 
+    const extractStart = Date.now();
     await sharp(mockupPath)
       .extract(faceRegion)
       .png()
       .toFile(faceCropPath);
+    console.log(`[STSTICKER_GEN] Recorte do rosto original extraido em ${Date.now() - extractStart}ms`);
 
-    // 4. Gerar novo rosto via OpenAI (APENAS o recorte do rosto)
+    // 4. Gerar novo rosto via OpenAI
+    const openAiStart = Date.now();
+    console.log('[STSTICKER_GEN] Iniciando chamada da OpenAI para troca de rosto...');
     const sourcePlayerCropPath = await generateFaceSwap(
       originalPath,
       faceCropPath,
       faceSwappedCropPath,
       data
     );
+    console.log(`[STSTICKER_GEN] Chamada OpenAI concluida/retornada em ${Date.now() - openAiStart}ms. Caminho do resultado: ${sourcePlayerCropPath}`);
 
-    // 5. Compor figurinha: colar rosto modificado + textos SVG
+    // 5. Compor figurinha
+    const composeStart = Date.now();
     const stickerBuffer = await composeSticker({
       id,
       data,
@@ -136,9 +159,13 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       mockupWidth,
       mockupHeight
     });
+    console.log(`[STSTICKER_GEN] Figurinha composta com textos e marca d'agua em ${Date.now() - composeStart}ms`);
 
     const imageDataUrl = `data:image/png;base64,${stickerBuffer.toString('base64')}`;
-    if (!isVercel) await fsp.writeFile(stickerPath, stickerBuffer);
+    if (!isVercel) {
+      await fsp.writeFile(stickerPath, stickerBuffer);
+      console.log(`[STSTICKER_GEN] Arquivo final salvo localmente em: ${stickerPath}`);
+    }
 
     const job = {
       id,
@@ -149,10 +176,14 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       createdAt: new Date().toISOString()
     };
     jobs.set(id, job);
+
+    console.log(`[STSTICKER_GEN] Sucesso! Processo total concluido em ${Date.now() - startTime}ms`);
     res.status(201).json(job);
   } catch (error) {
+    const elapsedTotal = Date.now() - startTime;
     const normalized = normalizeError(error);
-    console.error('Sticker generation failed:', normalized);
+    console.error(`[STSTICKER_GEN] [FALHA APOS ${elapsedTotal}ms] Erro detalhado:`, error);
+    console.error(`[STSTICKER_GEN] Erro normalizado enviado ao cliente:`, JSON.stringify(normalized));
     res.status(500).json({
       error: normalized.message || 'Nao foi possivel gerar a figurinha agora.',
       code: normalized.code,
@@ -187,16 +218,24 @@ function normalizePayload(body) {
 // Envia o RECORTE do template + foto do usuario para OpenAI trocar o rosto.
 async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
-  if (!canUseOpenAI) return faceCropPath; // Sem OpenAI, retorna crop original
+  if (!canUseOpenAI) {
+    console.log('[OPENAI_FS] OpenAI desativada (OPENAI_GENERATION_ENABLED = false ou chave ausente). Retornando crop original.');
+    return faceCropPath;
+  }
 
   await assertReadable(userPhotoPath, 'SOURCE_IMAGE_MISSING');
   await assertReadable(faceCropPath, 'FACE_CROP_MISSING');
+
+  const modelName = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  const qualitySetting = process.env.OPENAI_IMAGE_QUALITY || 'low';
+  console.log(`[OPENAI_FS] Inicializando cliente OpenAI. Modelo: "${modelName}", Qualidade: "${qualitySetting}"`);
 
   const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     timeout: generationTimeoutMs
   });
 
+  const uploadStart = Date.now();
   // Upload da foto do usuario (referencia de identidade)
   const sourceUpload = await toFile(
     await fsp.readFile(userPhotoPath),
@@ -210,6 +249,7 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
     'face-to-replace.png',
     { type: 'image/png' }
   );
+  console.log(`[OPENAI_FS] Arquivos preparados para upload em ${Date.now() - uploadStart}ms`);
 
   const birthDate = `${data.dia}-${months[data.mes] || data.mes}-${data.ano}`;
   const heightMeters = `${(Number(data.altura) / 100).toFixed(2).replace('.', ',')}m`;
@@ -219,33 +259,43 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
 
   const faceSwapPrompt = `SURGICAL LOCALIZED FOOTBALL STICKER EDIT. IMPORTANT: This is NOT a request to generate a new sticker. This is NOT a redesign task. This is NOT a collage task. Image 2 is the ORIGINAL IMMUTABLE football sticker template. Image 1 is ONLY a facial identity reference. Your task is to surgically edit the existing football sticker while preserving the original template structure. ================================================================== TASKS ================================================================== You must perform ONLY these edits: 1. Replace the player's visible face/head identity using Image 1. 2. Replace the player information text fields with the provided dynamic values. Do NOT modify anything else. ================================================================== DYNAMIC TEXT VALUES ================================================================== Replace the existing player data with: PLAYER NAME: ${nameStr} BIRTH DATE: ${birthDate} HEIGHT: ${heightMeters} WEIGHT: ${weightStr} CLUB: ${clubStr} ================================================================== FACE REPLACEMENT RULES ================================================================== Replace ONLY the player's head region. Do NOT: - paste the reference image directly - overlay the image - create a collage - generate floating squares - generate duplicated heads - generate duplicated faces The new face must: - match the original pose - match the original scale - match the original perspective - match the original lighting - match the original framing Preserve: - neck - jersey - shoulders - body - shadows - background The replacement must look natural and seamlessly integrated. ================================================================== TEXT REPLACEMENT RULES ================================================================== Replace ONLY the existing player information text. Preserve: - original text alignment - original font style - original typography structure - original spacing - original text positioning Do NOT: - generate extra text - duplicate country names - create additional labels - add bars - add shapes - create graphic overlays There must be only ONE country name visible. ================================================================== PIXEL PRESERVATION (CRITICAL) ================================================================== Preserve ALL non-edited pixels exactly as they exist in the original template. Do NOT modify: - borders - logos - graphics - layout - card proportions - watermarks - framing - background - flag - FIFA logo - Panini logo ================================================================== FAILURE CONDITIONS ================================================================== The result is incorrect if: - the sticker layout changes - the image is cropped - the card is regenerated - floating rectangles appear - duplicated text appears - duplicated heads appear - the face is pasted directly - logos change - proportions change - extra graphics appear - text disappears - placeholder text appears - text becomes unreadable ================================================================== FINAL OUTPUT ================================================================== Return the SAME original football sticker template with ONLY: - the player's facial identity changed - the player information text replaced Everything else must remain visually identical to the original template.`;
 
+  console.log(`[OPENAI_FS] Disparando chamada edit() na API da OpenAI... Prompt length: ${faceSwapPrompt.length} chars`);
+  
+  const apiStart = Date.now();
   const response = await client.images.edit({
-    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
+    model: modelName,
     image: [sourceUpload, faceCropUpload],
     prompt: faceSwapPrompt,
     size: '1024x1024',
-    quality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
+    quality: qualitySetting,
     n: 1
   });
+  const apiDuration = Date.now() - apiStart;
+  console.log(`[OPENAI_FS] OpenAI respondeu com sucesso em ${apiDuration}ms`);
 
   const b64 = response.data?.[0]?.b64_json;
   const url = response.data?.[0]?.url;
 
   let imageBuffer;
   if (b64) {
+    console.log('[OPENAI_FS] Recebido formato Base64 (b64_json). Convertendo para buffer...');
     imageBuffer = Buffer.from(b64, 'base64');
   } else if (url) {
+    console.log(`[OPENAI_FS] Recebido formato URL: ${url}. Iniciando download da imagem...`);
+    const fetchStart = Date.now();
     const resFetch = await fetch(url);
     if (!resFetch.ok) {
       throw new Error(`Falha ao baixar imagem gerada da URL: ${resFetch.statusText}`);
     }
     const arrayBuffer = await resFetch.arrayBuffer();
     imageBuffer = Buffer.from(arrayBuffer);
+    console.log(`[OPENAI_FS] Download da imagem concluido em ${Date.now() - fetchStart}ms`);
   } else {
     throw new Error('A API da OpenAI nao retornou nem base64 nem URL da imagem.');
   }
 
   await fsp.writeFile(outputPath, imageBuffer);
+  console.log(`[OPENAI_FS] Imagem processada salva temporariamente em: ${outputPath}`);
   return outputPath;
 }
 
