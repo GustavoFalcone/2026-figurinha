@@ -408,7 +408,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
   // Linhas de marca d'água diagonais (com estilos inline para garantir a renderização no SVG)
   const wmLines = Array.from({ length: 18 }, (_, row) => {
     const y = Math.round(-height * 0.15 + row * height * 0.085);
-    return `<text x="${Math.round(-width * 0.6)}" y="${y}" fill="rgba(255,255,255,0.18)" font-family="StickerFont, Arial, Helvetica, sans-serif" font-size="${fontSize.wm}px" font-weight="700" letter-spacing="2px">${watermark} • ${jobMark}</text>`;
+    return `<text x="${Math.round(-width * 0.6)}" y="${y}" fill="#FFFFFF" fill-opacity="0.18" font-family="StickerFont, Arial, Helvetica, sans-serif" font-size="${fontSize.wm}px" font-weight="700" letter-spacing="2px">${watermark} • ${jobMark}</text>`;
   }).join('');
 
   const regularFont = fontDataUri(regularFontPath);
@@ -496,7 +496,8 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
         font-family="StickerFont, Arial, Helvetica, sans-serif" 
         font-size="${fontSize.wmSmall}px" 
         font-weight="700" 
-        fill="rgba(255,255,255,0.6)" 
+        fill="#FFFFFF" 
+        fill-opacity="0.6" 
         text-anchor="middle" 
         transform="rotate(-25 ${width * 0.5} ${height * 0.72})"
         letter-spacing="1px"
