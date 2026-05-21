@@ -81,6 +81,8 @@ app.get('/api/stickers/:id', (req, res) => {
 app.post('/api/stickers', upload.single('photo'), async (req, res) => {
   const startTime = Date.now();
   console.log(`[STSTICKER_GEN] [${new Date().toISOString()}] Nova requisicao de figurinha recebida.`);
+  let usedModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  let usedPrompt = '';
   try {
     if (!req.file) {
       console.warn('[STSTICKER_GEN] Erro: Foto do craque nao enviada.');
@@ -91,10 +93,21 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     const data = normalizePayload(req.body);
     console.log('[STSTICKER_GEN] Dados recebidos:', JSON.stringify(data));
 
+    // Pre-build the prompt for reference/logging in case of errors
+    const birthDate = `${data.dia || ''}-${months[data.mes] || data.mes || ''}-${data.ano || ''}`;
+    const heightMeters = `${data.altura ? (Number(data.altura) / 100).toFixed(2).replace('.', ',') : ''}m`;
+    const weightStr = `${data.peso || ''}kg`;
+    const nameStr = (data.nome || '').toUpperCase();
+    const clubStr = (data.clube || '').toUpperCase();
+    usedPrompt = `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
+
     const missing = requiredFields.filter(field => !data[field]);
     if (missing.length) {
       console.warn(`[STSTICKER_GEN] Erro: Campos obrigatorios ausentes: ${missing.join(', ')}`);
-      res.status(400).json({ error: `Campos obrigatorios: ${missing.join(', ')}.` });
+      res.status(400).json({
+        error: `Campos obrigatorios: ${missing.join(', ')}.`,
+        debug: { model: usedModel, prompt: usedPrompt }
+      });
       return;
     }
 
@@ -141,12 +154,15 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     // 4. Gerar novo rosto via OpenAI
     const openAiStart = Date.now();
     console.log('[STSTICKER_GEN] Iniciando chamada da OpenAI para troca de rosto...');
-    const sourcePlayerCropPath = await generateFaceSwap(
+    const resultFS = await generateFaceSwap(
       originalPath,
       faceCropPath,
       faceSwappedCropPath,
       data
     );
+    const sourcePlayerCropPath = resultFS.path;
+    usedModel = resultFS.model;
+    usedPrompt = resultFS.prompt;
     console.log(`[STSTICKER_GEN] Chamada OpenAI concluida/retornada em ${Date.now() - openAiStart}ms. Caminho do resultado: ${sourcePlayerCropPath}`);
 
     // 5. Compor figurinha
@@ -173,7 +189,11 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       imageUrl: isVercel ? '' : `/output/${id}.png`,
       imageDataUrl,
       usedOpenAI: sourcePlayerCropPath === faceSwappedCropPath,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      debug: {
+        model: usedModel,
+        prompt: usedPrompt
+      }
     };
     jobs.set(id, job);
 
@@ -187,7 +207,11 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     res.status(500).json({
       error: normalized.message || 'Nao foi possivel gerar a figurinha agora.',
       code: normalized.code,
-      requestId: normalized.requestId
+      requestId: normalized.requestId,
+      debug: {
+        model: usedModel,
+        prompt: usedPrompt
+      }
     });
   }
 });
@@ -218,15 +242,24 @@ function normalizePayload(body) {
 // Envia o RECORTE do template + foto do usuario para OpenAI trocar o rosto.
 async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
+  const modelName = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  
+  const birthDate = `${data.dia}-${months[data.mes] || data.mes}-${data.ano}`;
+  const heightMeters = `${(Number(data.altura) / 100).toFixed(2).replace('.', ',')}m`;
+  const weightStr = `${data.peso}kg`;
+  const nameStr = data.nome.toUpperCase();
+  const clubStr = data.clube.toUpperCase();
+
+  const faceSwapPrompt = `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
+
   if (!canUseOpenAI) {
     console.log('[OPENAI_FS] OpenAI desativada (OPENAI_GENERATION_ENABLED = false ou chave ausente). Retornando crop original.');
-    return faceCropPath;
+    return { path: faceCropPath, prompt: faceSwapPrompt, model: modelName };
   }
 
   await assertReadable(userPhotoPath, 'SOURCE_IMAGE_MISSING');
   await assertReadable(faceCropPath, 'FACE_CROP_MISSING');
 
-  const modelName = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
   const qualitySetting = process.env.OPENAI_IMAGE_QUALITY || 'low';
   console.log(`[OPENAI_FS] Inicializando cliente OpenAI. Modelo: "${modelName}", Qualidade: "${qualitySetting}"`);
 
@@ -250,14 +283,6 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
     { type: 'image/png' }
   );
   console.log(`[OPENAI_FS] Arquivos preparados para upload em ${Date.now() - uploadStart}ms`);
-
-  const birthDate = `${data.dia}-${months[data.mes] || data.mes}-${data.ano}`;
-  const heightMeters = `${(Number(data.altura) / 100).toFixed(2).replace('.', ',')}m`;
-  const weightStr = `${data.peso}kg`;
-  const nameStr = data.nome.toUpperCase();
-  const clubStr = data.clube.toUpperCase();
-
-  const faceSwapPrompt = `SURGICAL LOCALIZED FOOTBALL STICKER EDIT. IMPORTANT: This is NOT a request to generate a new sticker. This is NOT a redesign task. This is NOT a collage task. Image 2 is the ORIGINAL IMMUTABLE football sticker template. Image 1 is ONLY a facial identity reference. Your task is to surgically edit the existing football sticker while preserving the original template structure. ================================================================== TASKS ================================================================== You must perform ONLY these edits: 1. Replace the player's visible face/head identity using Image 1. 2. Replace the player information text fields with the provided dynamic values. Do NOT modify anything else. ================================================================== DYNAMIC TEXT VALUES ================================================================== Replace the existing player data with: PLAYER NAME: ${nameStr} BIRTH DATE: ${birthDate} HEIGHT: ${heightMeters} WEIGHT: ${weightStr} CLUB: ${clubStr} ================================================================== FACE REPLACEMENT RULES ================================================================== Replace ONLY the player's head region. Do NOT: - paste the reference image directly - overlay the image - create a collage - generate floating squares - generate duplicated heads - generate duplicated faces The new face must: - match the original pose - match the original scale - match the original perspective - match the original lighting - match the original framing Preserve: - neck - jersey - shoulders - body - shadows - background The replacement must look natural and seamlessly integrated. ================================================================== TEXT REPLACEMENT RULES ================================================================== Replace ONLY the existing player information text. Preserve: - original text alignment - original font style - original typography structure - original spacing - original text positioning Do NOT: - generate extra text - duplicate country names - create additional labels - add bars - add shapes - create graphic overlays There must be only ONE country name visible. ================================================================== PIXEL PRESERVATION (CRITICAL) ================================================================== Preserve ALL non-edited pixels exactly as they exist in the original template. Do NOT modify: - borders - logos - graphics - layout - card proportions - watermarks - framing - background - flag - FIFA logo - Panini logo ================================================================== FAILURE CONDITIONS ================================================================== The result is incorrect if: - the sticker layout changes - the image is cropped - the card is regenerated - floating rectangles appear - duplicated text appears - duplicated heads appear - the face is pasted directly - logos change - proportions change - extra graphics appear - text disappears - placeholder text appears - text becomes unreadable ================================================================== FINAL OUTPUT ================================================================== Return the SAME original football sticker template with ONLY: - the player's facial identity changed - the player information text replaced Everything else must remain visually identical to the original template.`;
 
   console.log(`[OPENAI_FS] Disparando chamada edit() na API da OpenAI... Prompt length: ${faceSwapPrompt.length} chars`);
   
@@ -296,7 +321,7 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
 
   await fsp.writeFile(outputPath, imageBuffer);
   console.log(`[OPENAI_FS] Imagem processada salva temporariamente em: ${outputPath}`);
-  return outputPath;
+  return { path: outputPath, prompt: faceSwapPrompt, model: modelName };
 }
 
 // Compor figurinha: cola rosto novo no mockup + textos + marca d'agua

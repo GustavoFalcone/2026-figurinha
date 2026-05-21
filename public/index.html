@@ -1933,6 +1933,20 @@
         form.append(key, D[key]);
       });
 
+      // Estimar o prompt e modelo no lado do cliente para mostrar antes da chamada
+      const birthDate = `${D.dia}-${D.mes}-${D.ano}`;
+      const heightMeters = `${(Number(D.altura) / 100).toFixed(2).replace('.', ',')}m`;
+      const weightStr = `${D.peso}kg`;
+      const nameStr = D.nome.toUpperCase();
+      const clubStr = D.clube.toUpperCase();
+      const estimatedPrompt = `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
+
+      console.group("⚽ [DEBUG OPENAI] INICIANDO GERAÇÃO DA FIGURINHA");
+      console.log("%c[Configuração Estimada]", "color: #1e8689; font-weight: bold;");
+      console.log("Modelo a ser utilizado:", "gpt-image-2");
+      console.log("Prompt a ser enviado para o ChatGPT:\n", estimatedPrompt);
+      console.groupEnd();
+
       const response = await fetch('/api/stickers', {
         method: 'POST',
         body: form,
@@ -1940,9 +1954,25 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        console.group("%c❌ [DEBUG OPENAI] ERRO NA REQUISIÇÃO", "color: #d9534f; font-weight: bold;");
+        if (payload.debug) {
+          console.error("Modelo usado no backend:", payload.debug.model);
+          console.error("Prompt enviado no backend:\n", payload.debug.prompt);
+        }
+        console.error("Erro retornado:", payload.error || 'Erro desconhecido');
+        console.groupEnd();
         const code = payload.code ? ` (${payload.code})` : '';
         throw new Error(`${payload.error || 'Erro ao gerar a figurinha.'}${code}`);
       }
+      
+      console.group("%c✅ [DEBUG OPENAI] SUCESSO NA GERAÇÃO!", "color: #5cb85c; font-weight: bold;");
+      if (payload.debug) {
+        console.log("Modelo retornado pelo backend:", payload.debug.model);
+        console.log("Prompt final utilizado:\n", payload.debug.prompt);
+      }
+      console.log("Payload recebido:", payload);
+      console.groupEnd();
+
       return payload;
     }
 
