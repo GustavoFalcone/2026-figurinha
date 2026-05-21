@@ -61,7 +61,8 @@ app.get(['/health', '/api/health'], (_req, res) => {
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     openaiGenerationEnabled: process.env.OPENAI_GENERATION_ENABLED === 'true',
     openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
-    openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'low',
+    openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
+    openaiImageSize: process.env.OPENAI_IMAGE_SIZE || '1024x1536',
     assets: {
       mockup: fs.existsSync(mockupPath),
       regularFont: fs.existsSync(regularFontPath),
@@ -94,12 +95,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     console.log('[STSTICKER_GEN] Dados recebidos:', JSON.stringify(data));
 
     // Pre-build the prompt for reference/logging in case of errors
-    const birthDate = `${data.dia || ''}-${months[data.mes] || data.mes || ''}-${data.ano || ''}`;
-    const heightMeters = `${data.altura ? (Number(data.altura) / 100).toFixed(2).replace('.', ',') : ''}m`;
-    const weightStr = `${data.peso || ''}kg`;
-    const nameStr = (data.nome || '').toUpperCase();
-    const clubStr = (data.clube || '').toUpperCase();
-    usedPrompt = `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
+    usedPrompt = buildEditPrompt(data);
 
     const missing = requiredFields.filter(field => !data[field]);
     if (missing.length) {
@@ -113,69 +109,53 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
 
     const id = crypto.randomUUID();
     const originalPath = path.join(runtimeDir, `${id}-original.png`);
-    const faceSwappedPath = path.join(runtimeDir, `${id}-face-swapped.png`);
+    const aiOutputPath = path.join(runtimeDir, `${id}-ai-output.png`);
     const stickerPath = path.join(outputDir, `${id}.png`);
 
     console.log(`[STSTICKER_GEN] ID Gerado: ${id}`);
 
-    // 1. Salvar foto do usuário
+    // 1. Salvar foto do usuário (referencia de identidade facial)
+    //    NOTA: nao redimensionamos para um quadrado, mantemos a foto original
+    //    para preservar a qualidade da identidade facial enviada para o modelo.
     const savePhotoStart = Date.now();
     await sharp(req.file.buffer)
       .rotate()
-      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .resize(1536, 1536, { fit: 'inside', withoutEnlargement: true })
       .png({ compressionLevel: 9 })
       .toFile(originalPath);
     console.log(`[STSTICKER_GEN] Foto do usuario salva em ${Date.now() - savePhotoStart}ms`);
 
-    // 2. Obter metadados do mockup
+    // 2. Obter metadados do mockup (apenas para fallback local sem OpenAI)
     const mockupMeta = await sharp(mockupPath).metadata();
     const mockupWidth = mockupMeta.width;
     const mockupHeight = mockupMeta.height;
-    console.log(`[STSTICKER_GEN] Mockup metadata carregado. Largura: ${mockupWidth}px, Altura: ${mockupHeight}px`);
+    console.log(`[STSTICKER_GEN] Mockup metadata. Largura: ${mockupWidth}px, Altura: ${mockupHeight}px`);
 
-    // 3. Recortar região da cabeça do template
-    const faceRegion = {
-      left: Math.round(mockupWidth * 0.25),
-      top: Math.round(mockupHeight * 0.04),
-      width: Math.round(mockupWidth * 0.50),
-      height: Math.round(mockupHeight * 0.375)
-    };
-
-    const faceCropPath = path.join(runtimeDir, `${id}-face-crop.png`);
-    const faceSwappedCropPath = path.join(runtimeDir, `${id}-face-swapped.png`);
-
-    const extractStart = Date.now();
-    await sharp(mockupPath)
-      .extract(faceRegion)
-      .png()
-      .toFile(faceCropPath);
-    console.log(`[STSTICKER_GEN] Recorte do rosto original extraido em ${Date.now() - extractStart}ms`);
-
-    // 4. Gerar novo rosto via OpenAI
+    // 3. Gerar a FIGURINHA COMPLETA via OpenAI
+    //    O modelo recebe a figurinha-modelo (raphinha.png) E a foto do user,
+    //    e gera a figurinha final completa em uma unica chamada.
+    //    Nao recortamos mais o rosto: isso era a causa raiz do output ruim.
     const openAiStart = Date.now();
-    console.log('[STSTICKER_GEN] Iniciando chamada da OpenAI para troca de rosto...');
-    const resultFS = await generateFaceSwap(
-      originalPath,
-      faceCropPath,
-      faceSwappedCropPath,
-      data
-    );
-    const sourcePlayerCropPath = resultFS.path;
+    console.log('[STSTICKER_GEN] Iniciando chamada OpenAI: figurinha completa + foto -> figurinha personalizada...');
+    const resultFS = await generateFaceSwap(originalPath, aiOutputPath, data);
     usedModel = resultFS.model;
     usedPrompt = resultFS.prompt;
-    console.log(`[STSTICKER_GEN] Chamada OpenAI concluida/retornada em ${Date.now() - openAiStart}ms. Caminho do resultado: ${sourcePlayerCropPath}`);
+    const usedOpenAI = resultFS.usedOpenAI;
+    console.log(`[STSTICKER_GEN] Chamada OpenAI concluida em ${Date.now() - openAiStart}ms. OpenAI usado: ${usedOpenAI}. Resultado: ${resultFS.path}`);
 
-    // 5. Compor figurinha
+    // 4. Pos-processamento: aplica marca d'agua sobre o output da IA.
+    //    Quando OpenAI esta ativo, o output JA E a figurinha final pronta.
+    //    Quando OpenAI esta desativado (modo local), aplicamos composicao local.
     const composeStart = Date.now();
     const stickerBuffer = await composeSticker({
       id,
       data,
-      faceSwappedCropPath: sourcePlayerCropPath,
-      faceRegion,
+      aiResultPath: resultFS.path,
+      usedOpenAI,
       mockupWidth,
       mockupHeight
     });
-    console.log(`[STSTICKER_GEN] Figurinha composta com textos e marca d'agua em ${Date.now() - composeStart}ms`);
+    console.log(`[STSTICKER_GEN] Figurinha final composta em ${Date.now() - composeStart}ms`);
 
     const imageDataUrl = `data:image/png;base64,${stickerBuffer.toString('base64')}`;
     if (!isVercel) {
@@ -188,7 +168,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       status: 'done',
       imageUrl: isVercel ? '' : `/output/${id}.png`,
       imageDataUrl,
-      usedOpenAI: sourcePlayerCropPath === faceSwappedCropPath,
+      usedOpenAI,
       createdAt: new Date().toISOString(),
       debug: {
         model: usedModel,
@@ -239,29 +219,87 @@ function normalizePayload(body) {
   );
 }
 
-// Envia o RECORTE do template + foto do usuario para OpenAI trocar o rosto.
-async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
+// ─────────────────────────────────────────────────────────────────────────────
+// PROMPT BUILDER (gpt-image-2)
+// ─────────────────────────────────────────────────────────────────────────────
+// Seguindo o padrao oficial do OpenAI Cookbook para gpt-image-2:
+//   - Prompt em INGLES (recomendado pela docs oficial)
+//   - Referenciar cada imagem por INDICE e DESCRICAO (Image 1, Image 2)
+//   - Bloco "Change" + bloco "Preserve" (regra critica de edit endpoint)
+//   - Texto literal entre ASPAS DUPLAS (typography hint)
+//   - Lista explicita de tudo que NAO pode mudar (layout, faixas, logos,
+//     numero verde "23", camisa, FIFA, BRASIL, Panini, fundos, etc)
+//
+// Refs:
+//   - https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
+//   - https://fal.ai/learn/tools/prompting-gpt-image-2
+function buildEditPrompt(data) {
+  const birthDay = (data.dia || '').padStart(2, '0');
+  const monthNum = months[data.mes] || data.mes || '';
+  const birthDate = `${birthDay}-${monthNum}-${data.ano || ''}`;
+  const heightMeters = data.altura
+    ? `${(Number(data.altura) / 100).toFixed(2).replace('.', ',')}m`
+    : '';
+  const weightStr = data.peso ? `${data.peso}kg` : '';
+  const nameStr = (data.nome || '').toUpperCase();
+  const clubStr = (data.clube || '').toUpperCase();
+
+  return [
+    'You are editing a Panini-style soccer World Cup 2026 trading card.',
+    '',
+    'Image 1: the reference trading card template (the existing sticker with a player on a Brazil national team kit).',
+    'Image 2: the face reference photo of the new person who must replace the player on the card.',
+    '',
+    'TASK:',
+    `Re-render Image 1 as a complete, single trading card, replacing ONLY the player's face/head with the face from Image 2, and replacing ONLY the textual stats with the values listed below. Keep the result as ONE single trading card, fully filling the output canvas.`,
+    '',
+    'PRESERVE (these must stay IDENTICAL to Image 1):',
+    "- Overall card layout, framing, proportions, aspect ratio and composition.",
+    "- The teal/cyan rounded outer card border.",
+    "- The large green number \"23\" decoration on the background.",
+    "- The yellow Brazilian national team jersey with the green CBF crest and \"BRASIL\" label, the Nike logo, and the star pattern.",
+    "- The small FIFA World Cup trophy icon in the upper-right corner.",
+    "- The Brazil flag and the vertical \"FIFA WORLD CUP 26\" / event branding on the right side.",
+    "- The \"PANINI\" red logo at the bottom-right.",
+    "- The dark teal info bars at the bottom that hold the player name and stats.",
+    "- The lighting, colors, paper texture and overall finish of the original card.",
+    "- The person's neckline, shoulders and how they meet the jersey (no floating head, natural anatomy).",
+    '',
+    'CHANGE (apply ONLY these edits):',
+    '1. Replace the player\'s face and head with the face from Image 2. Match skin tone, hair, expression naturally to the body. Preserve the identity of the person in Image 2 (same facial features, same proportions, same hairline). Photoreal integration with the body, no cut-out look.',
+    `2. Replace the large player surname text in the info bar with: "${nameStr}".`,
+    `3. Replace the birth-date / height / weight line with: "${birthDate} | ${heightMeters} | ${weightStr}".`,
+    `4. Replace the club name in the lower bar with: "${clubStr}".`,
+    '',
+    'TYPOGRAPHY:',
+    '- Render every replaced text VERBATIM, in white, in the same bold sans-serif style as the original card, with the same size and placement.',
+    '- No extra words, no duplicate text, no watermark, no extra logos.',
+    '',
+    'OUTPUT:',
+    '- A single, complete Panini-style trading card, photoreal, sharp, filling the entire output canvas.',
+    '- Do NOT output a card-inside-a-card, do NOT output just a face crop, do NOT output a collage.',
+  ].join('\n');
+}
+
+// Envia a FIGURINHA COMPLETA (raphinha.png) + a FOTO DO USUARIO para a OpenAI,
+// e recebe de volta a figurinha final pronta. Em modo local (sem OpenAI),
+// retorna null para sinalizar que a composicao deve ser feita localmente.
+async function generateFaceSwap(userPhotoPath, outputPath, data) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
   const modelName = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
-  
-  const birthDate = `${data.dia}-${months[data.mes] || data.mes}-${data.ano}`;
-  const heightMeters = `${(Number(data.altura) / 100).toFixed(2).replace('.', ',')}m`;
-  const weightStr = `${data.peso}kg`;
-  const nameStr = data.nome.toUpperCase();
-  const clubStr = data.clube.toUpperCase();
-
-  const faceSwapPrompt = `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
+  const prompt = buildEditPrompt(data);
 
   if (!canUseOpenAI) {
-    console.log('[OPENAI_FS] OpenAI desativada (OPENAI_GENERATION_ENABLED = false ou chave ausente). Retornando crop original.');
-    return { path: faceCropPath, prompt: faceSwapPrompt, model: modelName };
+    console.log('[OPENAI_FS] OpenAI desativada (OPENAI_GENERATION_ENABLED=false ou chave ausente). Sera feita composicao local sobre o mockup.');
+    return { path: null, prompt, model: modelName, usedOpenAI: false };
   }
 
   await assertReadable(userPhotoPath, 'SOURCE_IMAGE_MISSING');
-  await assertReadable(faceCropPath, 'FACE_CROP_MISSING');
+  await assertReadable(mockupPath, 'MOCKUP_MISSING');
 
-  const qualitySetting = process.env.OPENAI_IMAGE_QUALITY || 'low';
-  console.log(`[OPENAI_FS] Inicializando cliente OpenAI. Modelo: "${modelName}", Qualidade: "${qualitySetting}"`);
+  const qualitySetting = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+  const sizeSetting = process.env.OPENAI_IMAGE_SIZE || '1024x1536';
+  console.log(`[OPENAI_FS] Inicializando cliente OpenAI. Modelo: "${modelName}", Qualidade: "${qualitySetting}", Size: "${sizeSetting}"`);
 
   const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -269,29 +307,34 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
   });
 
   const uploadStart = Date.now();
-  // Upload da foto do usuario (referencia de identidade)
-  const sourceUpload = await toFile(
+
+  // CORRECAO CRITICA: enviamos a FIGURINHA INTEIRA (raphinha.png) como Image 1,
+  // nao mais um recorte do rosto. Isso da contexto completo para o modelo
+  // entender layout, cores, fontes, logos e geometria da figurinha.
+  const templateUpload = await toFile(
+    await fsp.readFile(mockupPath),
+    'image-1-reference-card.png',
+    { type: 'image/png' }
+  );
+
+  // Image 2: foto do rosto do usuario (referencia de identidade).
+  const faceUpload = await toFile(
     await fsp.readFile(userPhotoPath),
-    'face-reference.png',
+    'image-2-face-reference.png',
     { type: 'image/png' }
   );
+  console.log(`[OPENAI_FS] Arquivos preparados em ${Date.now() - uploadStart}ms (template completo + foto do user)`);
 
-  // Upload do recorte do rosto (template a ser editado)
-  const faceCropUpload = await toFile(
-    await fsp.readFile(faceCropPath),
-    'face-to-replace.png',
-    { type: 'image/png' }
-  );
-  console.log(`[OPENAI_FS] Arquivos preparados para upload em ${Date.now() - uploadStart}ms`);
+  console.log(`[OPENAI_FS] Disparando edit() na API OpenAI. Prompt length: ${prompt.length} chars`);
 
-  console.log(`[OPENAI_FS] Disparando chamada edit() na API da OpenAI... Prompt length: ${faceSwapPrompt.length} chars`);
-  
   const apiStart = Date.now();
+  // IMPORTANTE: a ordem do array `image` importa - Image 1 primeiro, Image 2 depois,
+  // batendo com a numeracao usada no prompt.
   const response = await client.images.edit({
     model: modelName,
-    image: [sourceUpload, faceCropUpload],
-    prompt: faceSwapPrompt,
-    size: '1024x1024',
+    image: [templateUpload, faceUpload],
+    prompt,
+    size: sizeSetting,
     quality: qualitySetting,
     n: 1
   });
@@ -314,69 +357,58 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
     }
     const arrayBuffer = await resFetch.arrayBuffer();
     imageBuffer = Buffer.from(arrayBuffer);
-    console.log(`[OPENAI_FS] Download da imagem concluido em ${Date.now() - fetchStart}ms`);
+    console.log(`[OPENAI_FS] Download concluido em ${Date.now() - fetchStart}ms`);
   } else {
     throw new Error('A API da OpenAI nao retornou nem base64 nem URL da imagem.');
   }
 
   await fsp.writeFile(outputPath, imageBuffer);
-  console.log(`[OPENAI_FS] Imagem processada salva temporariamente em: ${outputPath}`);
-  return { path: outputPath, prompt: faceSwapPrompt, model: modelName };
+  console.log(`[OPENAI_FS] Figurinha final da IA salva em: ${outputPath}`);
+  return { path: outputPath, prompt, model: modelName, usedOpenAI: true };
 }
 
-// Compor figurinha: cola rosto novo no mockup + textos + marca d'agua
-async function composeSticker({ id, data, faceSwappedCropPath, faceRegion, mockupWidth, mockupHeight }) {
+// Compose final sticker:
+//  - usedOpenAI=true : o output da IA JA E a figurinha final. So aplicamos
+//    a marca d'agua/preview por cima. NAO recolamos rosto, NAO repintamos
+//    nenhuma faixa - tudo isso ja foi feito pelo gpt-image-2.
+//  - usedOpenAI=false: modo local (sem custo). Cai no fallback antigo de
+//    colar o crop do mockup + redesenhar dados via SVG.
+async function composeSticker({ id, data, aiResultPath, usedOpenAI, mockupWidth, mockupHeight }) {
+  if (usedOpenAI && aiResultPath) {
+    await assertReadable(aiResultPath, 'AI_RESULT_MISSING');
+    const aiMeta = await sharp(aiResultPath).metadata();
+    const width = aiMeta.width;
+    const height = aiMeta.height;
+
+    // Apenas a marca d'agua sobre o output da IA.
+    const watermarkSvg = buildWatermarkSvg({ id, width, height });
+
+    return sharp(aiResultPath)
+      .ensureAlpha()
+      .composite([
+        {
+          input: Buffer.from(watermarkSvg),
+          left: 0,
+          top: 0
+        }
+      ])
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  }
+
+  // ── FALLBACK LOCAL (sem OpenAI) ─────────────────────────────────────────
+  // Mantemos a logica antiga: pegamos o mockup do Raphinha e desenhamos
+  // os textos + marca d'agua. Util para dev local sem gastar credito.
   await assertReadable(mockupPath, 'MOCKUP_MISSING');
-  await assertReadable(faceSwappedCropPath, 'FACE_RESULT_MISSING');
 
   const width = mockupWidth;
   const height = mockupHeight;
-
   const textLayout = getTemplateTextLayout(width, height);
   const svgContent = buildStickerSvg({ id, data, width, height, textLayout });
 
-  // Redimensionar o rosto modificado para caber perfeitamente
-  const fittedFace = await sharp(faceSwappedCropPath)
-    .resize(faceRegion.width, faceRegion.height, {
-      fit: 'fill',
-      background: { r: 0, g: 0, b: 0, alpha: 0 }
-    })
-    .png()
-    .toBuffer();
-
-  // Criar máscara de blend suave nas bordas do rosto para não parecer colado
-  const blendMask = await sharp({
-    create: {
-      width: faceRegion.width,
-      height: faceRegion.height,
-      channels: 4,
-      background: { r: 255, g: 255, b: 255, alpha: 255 }
-    }
-  })
-    .blur(3)
-    .png()
-    .toBuffer();
-
-  const blendedFace = await sharp(fittedFace)
-    .composite([
-      {
-        input: blendMask,
-        blend: 'dest-in'
-      }
-    ])
-    .png()
-    .toBuffer();
-
-  // Compor: mockup original + rosto colado + textos SVG
   return sharp(mockupPath)
     .ensureAlpha()
     .composite([
-      {
-        input: blendedFace,
-        left: faceRegion.left,
-        top: faceRegion.top,
-        blend: 'over'
-      },
       {
         input: Buffer.from(svgContent),
         left: 0,
@@ -385,6 +417,38 @@ async function composeSticker({ id, data, faceSwappedCropPath, faceRegion, mocku
     ])
     .png({ compressionLevel: 9 })
     .toBuffer();
+}
+
+// Marca d'agua minimalista, aplicada por cima do output da IA.
+function buildWatermarkSvg({ id, width, height }) {
+  const watermark = escapeXml(
+    process.env.WATERMARK_TEXT || 'PREVIEW PROTEGIDO - DIREITOS AUTORAIS'
+  );
+  const jobMark = escapeXml(id.slice(0, 8).toUpperCase());
+  const wmFont = Math.round(height * 0.028);
+
+  // Linhas diagonais de marca d'agua.
+  const wmLines = Array.from({ length: 22 }, (_, row) => {
+    const y = Math.round(-height * 0.2 + row * height * 0.085);
+    return `<text x="${Math.round(-width * 0.6)}" y="${y}" fill="#FFFFFF" fill-opacity="0.16" font-family="Arial, Helvetica, sans-serif" font-size="${wmFont}px" font-weight="700" letter-spacing="2px">${watermark} • ${jobMark}</text>`;
+  }).join('');
+
+  return `
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+      <g transform="rotate(-25 ${width / 2} ${height / 2})">${wmLines}</g>
+      <text
+        x="${width * 0.5}"
+        y="${height * 0.93}"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="${Math.round(height * 0.018)}px"
+        font-weight="700"
+        fill="#FFFFFF"
+        fill-opacity="0.55"
+        text-anchor="middle"
+        letter-spacing="1px"
+      >PREVIEW • ${jobMark}</text>
+    </svg>
+  `;
 }
 
 function buildStickerSvg({ id, data, width, height, textLayout }) {
