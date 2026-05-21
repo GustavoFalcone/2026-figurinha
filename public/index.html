@@ -1933,18 +1933,15 @@
         form.append(key, D[key]);
       });
 
-      // Estimar o prompt e modelo no lado do cliente para mostrar antes da chamada
-      const birthDate = `${D.dia}-${D.mes}-${D.ano}`;
-      const heightMeters = `${(Number(D.altura) / 100).toFixed(2).replace('.', ',')}m`;
-      const weightStr = `${D.peso}kg`;
-      const nameStr = D.nome.toUpperCase();
-      const clubStr = D.clube.toUpperCase();
-      const estimatedPrompt = `Analise a figurinha e essa outra imagem que eu mandei (meu rosto), depois você vai pegar o meu rosto e colocar na figurinha e trocar os dados da figurinha por esses seguintes dados:\n\nNome: ${nameStr}\nData de nascimento: ${birthDate}\nAltura: ${heightMeters}\nPeso: ${weightStr}\nClube: ${clubStr}\n\nE me entregue a figurinha personalizada com meu rosto e meus dados no lugar desse exemplo.`;
-
+      // Apenas log de pre-requisicao. O prompt final e construido no backend
+      // a partir do template gpt-image-2 (em ingles, estruturado, com Preserve list).
+      // O prompt real volta no payload.debug.prompt para ser inspecionado.
       console.group("⚽ [DEBUG OPENAI] INICIANDO GERAÇÃO DA FIGURINHA");
       console.log("%c[Configuração Estimada]", "color: #1e8689; font-weight: bold;");
       console.log("Modelo a ser utilizado:", "gpt-image-2");
-      console.log("Prompt a ser enviado para o ChatGPT:\n", estimatedPrompt);
+      console.log("Tamanho de saída:", "1024x1536 (retrato 2:3, formato Panini)");
+      console.log("Imagens enviadas:", "Image 1 = figurinha-modelo (raphinha.png), Image 2 = foto do user");
+      console.log("Prompt: construído no backend (template oficial gpt-image-2 com Preserve list).");
       console.groupEnd();
 
       const response = await fetch('/api/stickers', {
