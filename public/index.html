@@ -1197,11 +1197,59 @@
       .step-number-bg { font-size: 100px; top: -20px; right: -10px; }
       .toast { bottom: 16px; font-size: 13px; padding: 12px 18px; }
       .share-row { gap: 10px; }
-      .btn-share { width: 44px; height: 44px; }
+    }
+    .anti-screenshot-blocker {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 2147483647 !important;
+      background: #000000 !important;
+      display: none;
+      pointer-events: all !important;
+    }
+    .anti-screenshot-blocker.active {
+      display: block !important;
+    }
+    
+    body.anti-screenshot-active {
+      background: #000000 !important;
+    }
+    body.anti-screenshot-active * {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      display: none !important;
+    }
+    body.anti-screenshot-active .anti-screenshot-blocker {
+      display: block !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+    }
+    
+    @media print {
+      html, body {
+        background: #000000 !important;
+        color: #000000 !important;
+      }
+      body * {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+      .anti-screenshot-blocker {
+        display: block !important;
+        background: #000000 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 2147483647 !important;
+      }
     }
   </style>
 </head>
 <body>
+  <div id="anti-screenshot-blocker" class="anti-screenshot-blocker"></div>
   <main>
     <section id="landing" class="screen">
       <div class="topbar">
@@ -2049,16 +2097,109 @@
       }
     });
 
-    document.addEventListener('keydown', event => {
-      const key = event.key.toLowerCase();
-      const blocked = key === 'printscrn' ||
-        (event.ctrlKey && ['s', 'p', 'u'].includes(key)) ||
-        (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key));
-      if (blocked) {
-        event.preventDefault();
-        showShield();
+    // Anti-Screenshot and Anti-Print Engine
+    const blockerEl = document.getElementById('anti-screenshot-blocker');
+    let restoreTimeout = null;
+
+    function activateScreenshotBlocker() {
+      if (restoreTimeout) {
+        clearTimeout(restoreTimeout);
+        restoreTimeout = null;
+      }
+      document.body.classList.add('anti-screenshot-active');
+      if (blockerEl) {
+        blockerEl.classList.add('active');
+      }
+    }
+
+    function deactivateScreenshotBlocker() {
+      if (restoreTimeout) clearTimeout(restoreTimeout);
+      // Mantém a tela preta por 450ms após focar novamente para assegurar que a captura do SO registrou apenas preto
+      restoreTimeout = setTimeout(() => {
+        document.body.classList.remove('anti-screenshot-active');
+        if (blockerEl) {
+          blockerEl.classList.remove('active');
+        }
+      }, 450);
+    }
+
+    // 1. Detectar perda de foco da janela (quando o usuário tenta tirar print por atalhos de hardware, gestos ou abre a central de controle/notificações)
+    window.addEventListener('blur', () => {
+      activateScreenshotBlocker();
+    });
+
+    window.addEventListener('focus', () => {
+      deactivateScreenshotBlocker();
+    });
+
+    // 2. Detectar mudança de visibilidade da página (ex: alternar aplicativos, suspender aba)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        activateScreenshotBlocker();
+      } else {
+        deactivateScreenshotBlocker();
       }
     });
+
+    // 3. Bloquear atalhos de teclado (Print Screen, Print, DevTools, Inspect, etc.)
+    document.addEventListener('keydown', event => {
+      const key = event.key.toLowerCase();
+      const keyCode = event.keyCode || event.which;
+
+      // Print Screen key (código 44)
+      if (keyCode === 44 || key === 'printscreen' || key === 'printscrn' || key === 'snapshot') {
+        event.preventDefault();
+        activateScreenshotBlocker();
+        // Limpar área de transferência imediatamente para remover o print do buffer
+        navigator.clipboard.writeText('').catch(() => {});
+        deactivateScreenshotBlocker();
+        showToast('Captura de tela bloqueada neste site.', '🔒');
+        return;
+      }
+
+      // Bloquear atalhos de Impressão (Ctrl + P / Cmd + P)
+      if ((event.ctrlKey || event.metaKey) && key === 'p') {
+        event.preventDefault();
+        activateScreenshotBlocker();
+        deactivateScreenshotBlocker();
+        showToast('Impressão bloqueada.', '🔒');
+        return;
+      }
+
+      // Bloquear salvar página (Ctrl + S / Cmd + S)
+      if ((event.ctrlKey || event.metaKey) && key === 's') {
+        event.preventDefault();
+        showToast('Não é permitido salvar o conteúdo.', '🔒');
+        return;
+      }
+
+      // Bloquear ver código fonte (Ctrl + U / Cmd + U)
+      if ((event.ctrlKey || event.metaKey) && key === 'u') {
+        event.preventDefault();
+        showToast('Código fonte protegido.', '🔒');
+        return;
+      }
+
+      // Bloquear abrir DevTools (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C)
+      const isDevTools = key === 'f12' || 
+        (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+        (event.metaKey && event.altKey && ['i', 'j', 'c'].includes(key));
+      
+      if (isDevTools) {
+        event.preventDefault();
+        showToast('Ferramentas de desenvolvedor bloqueadas.', '🔒');
+      }
+    });
+
+    // 4. Bloquear captura em navegadores móveis baseado em toques e interações
+    // Impedir gestos comuns de prints ou toques de 3 dedos
+    document.addEventListener('touchstart', event => {
+      if (event.touches.length >= 3) {
+        event.preventDefault();
+        activateScreenshotBlocker();
+        deactivateScreenshotBlocker();
+      }
+    }, { passive: false });
   </script>
 </body>
 </html>
