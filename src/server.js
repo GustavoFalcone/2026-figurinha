@@ -103,21 +103,35 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     const mockupWidth = mockupMeta.width;
     const mockupHeight = mockupMeta.height;
 
-    // 3. Gerar sticker com rosto trocado via OpenAI (SOMENTE rosto, sem texto)
-    //    Envia o mockup INTEIRO + foto do usuário. A IA retorna o sticker
-    //    completo com o rosto já trocado.
-    const sourceStickerPath = await generateFaceSwap(
+    // 3. Recortar somente a região da cabeça do template para enviar à IA
+    const faceRegion = {
+      left: Math.round(mockupWidth * 0.25),
+      top: Math.round(mockupHeight * 0.04),
+      width: Math.round(mockupWidth * 0.50),
+      height: Math.round(mockupHeight * 0.375)
+    };
+
+    const faceCropPath = path.join(runtimeDir, `${id}-face-crop.png`);
+    const faceSwappedCropPath = path.join(runtimeDir, `${id}-face-swapped.png`);
+
+    await sharp(mockupPath)
+      .extract(faceRegion)
+      .png()
+      .toFile(faceCropPath);
+
+    // 4. Gerar novo rosto via OpenAI (APENAS o recorte do rosto)
+    const sourcePlayerCropPath = await generateFaceSwap(
       originalPath,
-      faceSwappedPath
+      faceCropPath,
+      faceSwappedCropPath
     );
 
-    // 4. Compor figurinha: sticker com rosto trocado + textos via backend SVG
-    //    O backend desenha barras sobre o texto antigo e escreve os novos
-    //    dados (nome, data, altura, peso, clube) de forma consistente.
+    // 5. Compor figurinha: colar rosto modificado + textos SVG
     const stickerBuffer = await composeSticker({
       id,
       data,
-      baseStickerPath: sourceStickerPath,
+      faceSwappedCropPath: sourcePlayerCropPath,
+      faceRegion,
       mockupWidth,
       mockupHeight
     });
@@ -130,7 +144,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       status: 'done',
       imageUrl: isVercel ? '' : `/output/${id}.png`,
       imageDataUrl,
-      usedOpenAI: sourceStickerPath === faceSwappedPath,
+      usedOpenAI: sourcePlayerCropPath === faceSwappedCropPath,
       createdAt: new Date().toISOString()
     };
     jobs.set(id, job);
@@ -170,14 +184,13 @@ function normalizePayload(body) {
   );
 }
 
-// Envia o mockup INTEIRO + foto do usuario para OpenAI trocar SOMENTE o rosto.
-// O texto NAO eh alterado pela IA — o backend cuida disso via SVG.
-async function generateFaceSwap(userPhotoPath, outputPath) {
+// Envia o RECORTE do template + foto do usuario para OpenAI trocar o rosto.
+async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
-  if (!canUseOpenAI) return mockupPath; // Sem OpenAI, retorna mockup original
+  if (!canUseOpenAI) return faceCropPath; // Sem OpenAI, retorna crop original
 
   await assertReadable(userPhotoPath, 'SOURCE_IMAGE_MISSING');
-  await assertReadable(mockupPath, 'MOCKUP_MISSING');
+  await assertReadable(faceCropPath, 'FACE_CROP_MISSING');
 
   const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -191,10 +204,10 @@ async function generateFaceSwap(userPhotoPath, outputPath) {
     { type: 'image/png' }
   );
 
-  // Upload do mockup completo (template a ser editado)
-  const mockupUpload = await toFile(
-    await fsp.readFile(mockupPath),
-    'sticker-template.png',
+  // Upload do recorte do rosto (template a ser editado)
+  const faceCropUpload = await toFile(
+    await fsp.readFile(faceCropPath),
+    'face-to-replace.png',
     { type: 'image/png' }
   );
 
@@ -305,7 +318,7 @@ Everything else must remain visually identical to the original template.`;
 
   const response = await client.images.edit({
     model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
-    image: [sourceUpload, mockupUpload],
+    image: [sourceUpload, faceCropUpload],
     prompt: faceSwapPrompt,
     size: '1024x1024',
     quality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
@@ -318,12 +331,10 @@ Everything else must remain visually identical to the original template.`;
   return outputPath;
 }
 
-// Compor figurinha: sticker base (com rosto trocado pela IA ou mockup original)
-// + textos desenhados pelo backend via SVG + marca d'agua.
-// A IA NAO mexe em texto. O backend apaga o texto antigo com barras coloridas
-// e escreve os novos dados do jogador de forma consistente.
-async function composeSticker({ id, data, baseStickerPath, mockupWidth, mockupHeight }) {
-  await assertReadable(baseStickerPath, 'BASE_STICKER_MISSING');
+// Compor figurinha: cola rosto novo no mockup + textos + marca d'agua
+async function composeSticker({ id, data, faceSwappedCropPath, faceRegion, mockupWidth, mockupHeight }) {
+  await assertReadable(mockupPath, 'MOCKUP_MISSING');
+  await assertReadable(faceSwappedCropPath, 'FACE_RESULT_MISSING');
 
   const width = mockupWidth;
   const height = mockupHeight;
@@ -331,11 +342,48 @@ async function composeSticker({ id, data, baseStickerPath, mockupWidth, mockupHe
   const textLayout = getTemplateTextLayout(width, height);
   const svgContent = buildStickerSvg({ id, data, width, height, textLayout });
 
-  // Compor: sticker base (com rosto trocado) + textos SVG
-  return sharp(baseStickerPath)
-    .resize(width, height, { fit: 'fill' })
+  // Redimensionar o rosto modificado para caber perfeitamente
+  const fittedFace = await sharp(faceSwappedCropPath)
+    .resize(faceRegion.width, faceRegion.height, {
+      fit: 'fill',
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    })
+    .png()
+    .toBuffer();
+
+  // Criar máscara de blend suave nas bordas do rosto para não parecer colado
+  const blendMask = await sharp({
+    create: {
+      width: faceRegion.width,
+      height: faceRegion.height,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 255 }
+    }
+  })
+    .blur(3)
+    .png()
+    .toBuffer();
+
+  const blendedFace = await sharp(fittedFace)
+    .composite([
+      {
+        input: blendMask,
+        blend: 'dest-in'
+      }
+    ])
+    .png()
+    .toBuffer();
+
+  // Compor: mockup original + rosto colado + textos SVG
+  return sharp(mockupPath)
     .ensureAlpha()
     .composite([
+      {
+        input: blendedFace,
+        left: faceRegion.left,
+        top: faceRegion.top,
+        blend: 'over'
+      },
       {
         input: Buffer.from(svgContent),
         left: 0,
@@ -357,10 +405,10 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
   );
   const jobMark = escapeXml(id.slice(0, 8).toUpperCase());
 
-  // Linhas de marca d'água diagonais
+  // Linhas de marca d'água diagonais (com estilos inline para garantir a renderização no SVG)
   const wmLines = Array.from({ length: 18 }, (_, row) => {
     const y = Math.round(-height * 0.15 + row * height * 0.085);
-    return `<text x="${Math.round(-width * 0.6)}" y="${y}" class="wm">${watermark} • ${jobMark}</text>`;
+    return `<text x="${Math.round(-width * 0.6)}" y="${y}" fill="rgba(255,255,255,0.18)" font-family="StickerFont, Arial, Helvetica, sans-serif" font-size="${fontSize.wm}px" font-weight="700" letter-spacing="2px">${watermark} • ${jobMark}</text>`;
   }).join('');
 
   const regularFont = fontDataUri(regularFontPath);
@@ -408,7 +456,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text
         x="${textLayout.name.x}"
         y="${textLayout.name.y}"
-        font-family="StickerFont, sans-serif" 
+        font-family="StickerFont, Arial, Helvetica, sans-serif" 
         font-size="${fontSize.name}px" 
         font-weight="700" 
         fill="#FFFFFF" 
@@ -420,7 +468,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text
         x="${textLayout.details.x}"
         y="${textLayout.details.y}"
-        font-family="StickerFont, sans-serif" 
+        font-family="StickerFont, Arial, Helvetica, sans-serif" 
         font-size="${fontSize.details}px" 
         font-weight="400" 
         fill="#FFFFFF" 
@@ -433,7 +481,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text
         x="${textLayout.club.x}"
         y="${textLayout.club.y}"
-        font-family="StickerFont, sans-serif" 
+        font-family="StickerFont, Arial, Helvetica, sans-serif" 
         font-size="${fontSize.club}px" 
         font-weight="700" 
         fill="#FFFFFF" 
@@ -445,7 +493,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
       <text 
         x="${width * 0.5}" 
         y="${height * 0.72}" 
-        font-family="StickerFont, sans-serif" 
+        font-family="StickerFont, Arial, Helvetica, sans-serif" 
         font-size="${fontSize.wmSmall}px" 
         font-weight="700" 
         fill="rgba(255,255,255,0.6)" 
