@@ -60,7 +60,7 @@ app.get(['/health', '/api/health'], (_req, res) => {
     ok: true,
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     openaiGenerationEnabled: process.env.OPENAI_GENERATION_ENABLED === 'true',
-    openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
+    openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
     openaiImageQuality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
     assets: {
       mockup: fs.existsSync(mockupPath),
@@ -123,7 +123,8 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     const sourcePlayerCropPath = await generateFaceSwap(
       originalPath,
       faceCropPath,
-      faceSwappedCropPath
+      faceSwappedCropPath,
+      data
     );
 
     // 5. Compor figurinha: colar rosto modificado + textos SVG
@@ -184,7 +185,7 @@ function normalizePayload(body) {
 }
 
 // Envia o RECORTE do template + foto do usuario para OpenAI trocar o rosto.
-async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath) {
+async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath, data) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
   if (!canUseOpenAI) return faceCropPath; // Sem OpenAI, retorna crop original
 
@@ -210,113 +211,16 @@ async function generateFaceSwap(userPhotoPath, faceCropPath, outputPath) {
     { type: 'image/png' }
   );
 
-  // Prompt: troca SOMENTE o rosto, NAO mexe em texto
-  const faceSwapPrompt = `SURGICAL LOCALIZED FOOTBALL STICKER EDIT.
+  const birthDate = `${data.dia}-${months[data.mes] || data.mes}-${data.ano}`;
+  const heightMeters = `${(Number(data.altura) / 100).toFixed(2).replace('.', ',')}m`;
+  const weightStr = `${data.peso}kg`;
+  const nameStr = data.nome.toUpperCase();
+  const clubStr = data.clube.toUpperCase();
 
-IMPORTANT:
-This is NOT a request to generate a new sticker.
-This is NOT a redesign task.
-This is NOT a collage task.
-
-Image 2 is the ORIGINAL IMMUTABLE football sticker template.
-Image 1 is ONLY a facial identity reference.
-
-Your task is to surgically edit the existing football sticker while preserving the original template structure.
-
-==================================================================
-TASKS
-==================================================================
-
-You must perform ONLY this edit:
-1. Replace the player's visible face/head identity using Image 1.
-
-Do NOT modify anything else.
-
-==================================================================
-FACE REPLACEMENT RULES
-==================================================================
-
-Replace ONLY the player's head region.
-
-Do NOT:
-- paste the reference image directly
-- overlay the image
-- create a collage
-- generate floating squares
-- generate duplicated heads
-- generate duplicated faces
-
-The new face must:
-- match the original pose
-- match the original scale
-- match the original perspective
-- match the original lighting
-- match the original framing
-
-Preserve:
-- neck
-- jersey
-- shoulders
-- body
-- shadows
-- background
-
-The replacement must look natural and seamlessly integrated.
-
-==================================================================
-TEXT PRESERVATION (CRITICAL)
-==================================================================
-
-Do NOT modify, remove, or regenerate ANY text in the sticker.
-Leave ALL existing text exactly as it appears in the original template.
-The backend will handle text replacement separately.
-
-==================================================================
-PIXEL PRESERVATION (CRITICAL)
-==================================================================
-
-Preserve ALL non-edited pixels exactly as they exist in the original template.
-
-Do NOT modify:
-- borders
-- logos
-- graphics
-- layout
-- card proportions
-- watermarks
-- framing
-- background
-- flag
-- FIFA logo
-- Panini logo
-- text bars
-- player information text
-
-==================================================================
-FAILURE CONDITIONS
-==================================================================
-
-The result is incorrect if:
-- the sticker layout changes
-- the image is cropped
-- the card is regenerated
-- floating rectangles appear
-- duplicated heads appear
-- the face is pasted directly
-- logos change
-- proportions change
-- extra graphics appear
-- text changes in any way
-
-==================================================================
-FINAL OUTPUT
-==================================================================
-
-Return the SAME original football sticker template with ONLY the player's facial identity changed.
-Everything else must remain visually identical to the original template.`;
+  const faceSwapPrompt = `SURGICAL LOCALIZED FOOTBALL STICKER EDIT. IMPORTANT: This is NOT a request to generate a new sticker. This is NOT a redesign task. This is NOT a collage task. Image 2 is the ORIGINAL IMMUTABLE football sticker template. Image 1 is ONLY a facial identity reference. Your task is to surgically edit the existing football sticker while preserving the original template structure. ================================================================== TASKS ================================================================== You must perform ONLY these edits: 1. Replace the player's visible face/head identity using Image 1. 2. Replace the player information text fields with the provided dynamic values. Do NOT modify anything else. ================================================================== DYNAMIC TEXT VALUES ================================================================== Replace the existing player data with: PLAYER NAME: ${nameStr} BIRTH DATE: ${birthDate} HEIGHT: ${heightMeters} WEIGHT: ${weightStr} CLUB: ${clubStr} ================================================================== FACE REPLACEMENT RULES ================================================================== Replace ONLY the player's head region. Do NOT: - paste the reference image directly - overlay the image - create a collage - generate floating squares - generate duplicated heads - generate duplicated faces The new face must: - match the original pose - match the original scale - match the original perspective - match the original lighting - match the original framing Preserve: - neck - jersey - shoulders - body - shadows - background The replacement must look natural and seamlessly integrated. ================================================================== TEXT REPLACEMENT RULES ================================================================== Replace ONLY the existing player information text. Preserve: - original text alignment - original font style - original typography structure - original spacing - original text positioning Do NOT: - generate extra text - duplicate country names - create additional labels - add bars - add shapes - create graphic overlays There must be only ONE country name visible. ================================================================== PIXEL PRESERVATION (CRITICAL) ================================================================== Preserve ALL non-edited pixels exactly as they exist in the original template. Do NOT modify: - borders - logos - graphics - layout - card proportions - watermarks - framing - background - flag - FIFA logo - Panini logo ================================================================== FAILURE CONDITIONS ================================================================== The result is incorrect if: - the sticker layout changes - the image is cropped - the card is regenerated - floating rectangles appear - duplicated text appears - duplicated heads appear - the face is pasted directly - logos change - proportions change - extra graphics appear - text disappears - placeholder text appears - text becomes unreadable ================================================================== FINAL OUTPUT ================================================================== Return the SAME original football sticker template with ONLY: - the player's facial identity changed - the player information text replaced Everything else must remain visually identical to the original template.`;
 
   const response = await client.images.edit({
-    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
+    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
     image: [sourceUpload, faceCropUpload],
     prompt: faceSwapPrompt,
     size: '1024x1024',
