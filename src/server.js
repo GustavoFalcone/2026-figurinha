@@ -153,10 +153,9 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
     const normalized = normalizeError(error);
     console.error('Sticker generation failed:', normalized);
     res.status(500).json({
-      error: 'Nao foi possivel gerar a figurinha agora.',
+      error: normalized.message || 'Nao foi possivel gerar a figurinha agora.',
       code: normalized.code,
-      requestId: normalized.requestId,
-      detail: isProduction ? undefined : normalized.message
+      requestId: normalized.requestId
     });
   }
 });
@@ -326,8 +325,23 @@ Everything else must remain visually identical to the original template.`;
   });
 
   const b64 = response.data?.[0]?.b64_json;
-  if (!b64) throw new Error('A API da OpenAI nao retornou a imagem em base64.');
-  await fsp.writeFile(outputPath, Buffer.from(b64, 'base64'));
+  const url = response.data?.[0]?.url;
+
+  let imageBuffer;
+  if (b64) {
+    imageBuffer = Buffer.from(b64, 'base64');
+  } else if (url) {
+    const resFetch = await fetch(url);
+    if (!resFetch.ok) {
+      throw new Error(`Falha ao baixar imagem gerada da URL: ${resFetch.statusText}`);
+    }
+    const arrayBuffer = await resFetch.arrayBuffer();
+    imageBuffer = Buffer.from(arrayBuffer);
+  } else {
+    throw new Error('A API da OpenAI nao retornou nem base64 nem URL da imagem.');
+  }
+
+  await fsp.writeFile(outputPath, imageBuffer);
   return outputPath;
 }
 
