@@ -88,8 +88,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
 
     const id = crypto.randomUUID();
     const originalPath = path.join(runtimeDir, `${id}-original.png`);
-    const faceCropPath = path.join(runtimeDir, `${id}-face-crop.png`);
-    const faceResultPath = path.join(runtimeDir, `${id}-face-result.png`);
+    const faceSwappedPath = path.join(runtimeDir, `${id}-face-swapped.png`);
     const stickerPath = path.join(outputDir, `${id}.png`);
 
     // 1. Salvar foto do usuário
@@ -99,38 +98,26 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       .png({ compressionLevel: 9 })
       .toFile(originalPath);
 
-    // 2. Obter metadados do mockup para calibrar posições
+    // 2. Obter metadados do mockup para calibrar posições de texto
     const mockupMeta = await sharp(mockupPath).metadata();
     const mockupWidth = mockupMeta.width;
     const mockupHeight = mockupMeta.height;
 
-    // 3. Recortar somente a região da cabeça do template.
-    const faceRegion = {
-      left: Math.round(mockupWidth * 0.25),
-      top: Math.round(mockupHeight * 0.04),
-      width: Math.round(mockupWidth * 0.50),
-      height: Math.round(mockupHeight * 0.375)
-    };
-
-    await sharp(mockupPath)
-      .extract(faceRegion)
-      .png()
-      .toFile(faceCropPath);
-
-    // 4. Gerar novo rosto usando OpenAI (APENAS o rosto, não o corpo)
-    const sourcePlayerPath = await generateFaceOnly(
+    // 3. Gerar sticker com rosto trocado via OpenAI (SOMENTE rosto, sem texto)
+    //    Envia o mockup INTEIRO + foto do usuário. A IA retorna o sticker
+    //    completo com o rosto já trocado.
+    const sourceStickerPath = await generateFaceSwap(
       originalPath,
-      faceCropPath,
-      faceResultPath,
-      data
+      faceSwappedPath
     );
 
-    // 5. Compor figurinha: colar rosto modificado de volta no mockup + textos
+    // 4. Compor figurinha: sticker com rosto trocado + textos via backend SVG
+    //    O backend desenha barras sobre o texto antigo e escreve os novos
+    //    dados (nome, data, altura, peso, clube) de forma consistente.
     const stickerBuffer = await composeSticker({
       id,
       data,
-      faceResultPath: sourcePlayerPath,
-      faceRegion,
+      baseStickerPath: sourceStickerPath,
       mockupWidth,
       mockupHeight
     });
@@ -143,7 +130,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       status: 'done',
       imageUrl: isVercel ? '' : `/output/${id}.png`,
       imageDataUrl,
-      usedOpenAI: sourcePlayerPath === faceResultPath,
+      usedOpenAI: sourceStickerPath === faceSwappedPath,
       createdAt: new Date().toISOString()
     };
     jobs.set(id, job);
@@ -183,66 +170,143 @@ function normalizePayload(body) {
   );
 }
 
-// Troca APENAS o rosto - edita somente a região recortada
-async function generateFaceOnly(sourcePath, faceCropPath, outputPath, data) {
+// Envia o mockup INTEIRO + foto do usuario para OpenAI trocar SOMENTE o rosto.
+// O texto NAO eh alterado pela IA — o backend cuida disso via SVG.
+async function generateFaceSwap(userPhotoPath, outputPath) {
   const canUseOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_GENERATION_ENABLED === 'true';
-  if (!canUseOpenAI) return faceCropPath; // Sem OpenAI, retorna crop original
+  if (!canUseOpenAI) return mockupPath; // Sem OpenAI, retorna mockup original
 
-  await assertReadable(sourcePath, 'SOURCE_IMAGE_MISSING');
-  await assertReadable(faceCropPath, 'FACE_CROP_MISSING');
+  await assertReadable(userPhotoPath, 'SOURCE_IMAGE_MISSING');
+  await assertReadable(mockupPath, 'MOCKUP_MISSING');
 
   const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     timeout: generationTimeoutMs
   });
 
-  // Upload da foto do usuário (referência de identidade)
+  // Upload da foto do usuario (referencia de identidade)
   const sourceUpload = await toFile(
-    await fsp.readFile(sourcePath),
+    await fsp.readFile(userPhotoPath),
     'face-reference.png',
     { type: 'image/png' }
   );
 
-  // Upload do rosto recortado do mockup (região a ser editada)
-  const faceCropUpload = await toFile(
-    await fsp.readFile(faceCropPath),
-    'face-to-replace.png',
+  // Upload do mockup completo (template a ser editado)
+  const mockupUpload = await toFile(
+    await fsp.readFile(mockupPath),
+    'sticker-template.png',
     { type: 'image/png' }
   );
 
-  // Prompt CIRÚRGICO - troca APENAS o rosto
-  const surgicalPrompt = `SURGICAL TEMPLATE EDIT - DO NOT CREATE A NEW STICKER.
+  // Prompt: troca SOMENTE o rosto, NAO mexe em texto
+  const faceSwapPrompt = `SURGICAL LOCALIZED FOOTBALL STICKER EDIT.
 
-INPUT: Two images.
-Image 1 (face-reference.png): user photo, use only as identity reference.
-Image 2 (face-to-replace.png): fixed crop from the original football sticker template.
+IMPORTANT:
+This is NOT a request to generate a new sticker.
+This is NOT a redesign task.
+This is NOT a collage task.
 
-YOUR TASK:
-1. Return Image 2 edited in place.
-2. Replace only the visible face/head identity in Image 2 with the person from Image 1.
-3. Preserve all non-face template pixels as much as possible.
-4. Keep the exact same:
-   - Head angle and pose from Image 2
-   - Lighting direction and intensity from Image 2  
-   - Neck/collar/uniform from Image 2
-   - Background color/gradient from Image 2
-   - Layout, logos, borders, graphics and crop from Image 2
+Image 2 is the ORIGINAL IMMUTABLE football sticker template.
+Image 1 is ONLY a facial identity reference.
 
-CRITICAL CONSTRAINTS:
-- Do not create a new sticker.
-- Do not add text, borders, frames, decorations, bars, logos, shapes or extra graphics.
-- Do not change the body, uniform, pose, framing, background or existing template design.
-- Do not show two heads or two faces.
-- Only the identity of the face/head may change.
-- Blend edges seamlessly so no seam is visible
-- The face should look like it naturally belongs in the sticker
+Your task is to surgically edit the existing football sticker while preserving the original template structure.
 
-This is for a collectible football sticker. The result must look professional and seamless.`;
+==================================================================
+TASKS
+==================================================================
+
+You must perform ONLY this edit:
+1. Replace the player's visible face/head identity using Image 1.
+
+Do NOT modify anything else.
+
+==================================================================
+FACE REPLACEMENT RULES
+==================================================================
+
+Replace ONLY the player's head region.
+
+Do NOT:
+- paste the reference image directly
+- overlay the image
+- create a collage
+- generate floating squares
+- generate duplicated heads
+- generate duplicated faces
+
+The new face must:
+- match the original pose
+- match the original scale
+- match the original perspective
+- match the original lighting
+- match the original framing
+
+Preserve:
+- neck
+- jersey
+- shoulders
+- body
+- shadows
+- background
+
+The replacement must look natural and seamlessly integrated.
+
+==================================================================
+TEXT PRESERVATION (CRITICAL)
+==================================================================
+
+Do NOT modify, remove, or regenerate ANY text in the sticker.
+Leave ALL existing text exactly as it appears in the original template.
+The backend will handle text replacement separately.
+
+==================================================================
+PIXEL PRESERVATION (CRITICAL)
+==================================================================
+
+Preserve ALL non-edited pixels exactly as they exist in the original template.
+
+Do NOT modify:
+- borders
+- logos
+- graphics
+- layout
+- card proportions
+- watermarks
+- framing
+- background
+- flag
+- FIFA logo
+- Panini logo
+- text bars
+- player information text
+
+==================================================================
+FAILURE CONDITIONS
+==================================================================
+
+The result is incorrect if:
+- the sticker layout changes
+- the image is cropped
+- the card is regenerated
+- floating rectangles appear
+- duplicated heads appear
+- the face is pasted directly
+- logos change
+- proportions change
+- extra graphics appear
+- text changes in any way
+
+==================================================================
+FINAL OUTPUT
+==================================================================
+
+Return the SAME original football sticker template with ONLY the player's facial identity changed.
+Everything else must remain visually identical to the original template.`;
 
   const response = await client.images.edit({
     model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
-    image: [sourceUpload, faceCropUpload],
-    prompt: surgicalPrompt,
+    image: [sourceUpload, mockupUpload],
+    prompt: faceSwapPrompt,
     size: '1024x1024',
     quality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
     n: 1
@@ -254,61 +318,24 @@ This is for a collectible football sticker. The result must look professional an
   return outputPath;
 }
 
-// Compor figurinha: mockup original + rosto modificado + textos
-async function composeSticker({ id, data, faceResultPath, faceRegion, mockupWidth, mockupHeight }) {
-  await assertReadable(mockupPath, 'MOCKUP_MISSING');
-  await assertReadable(faceResultPath, 'FACE_RESULT_MISSING');
+// Compor figurinha: sticker base (com rosto trocado pela IA ou mockup original)
+// + textos desenhados pelo backend via SVG + marca d'agua.
+// A IA NAO mexe em texto. O backend apaga o texto antigo com barras coloridas
+// e escreve os novos dados do jogador de forma consistente.
+async function composeSticker({ id, data, baseStickerPath, mockupWidth, mockupHeight }) {
+  await assertReadable(baseStickerPath, 'BASE_STICKER_MISSING');
 
   const width = mockupWidth;
   const height = mockupHeight;
 
   const textLayout = getTemplateTextLayout(width, height);
-
-  // Redimensionar o rosto modificado para caber exatamente na região recortada
-  const fittedFace = await sharp(faceResultPath)
-    .resize(faceRegion.width, faceRegion.height, {
-      fit: 'fill',
-      background: { r: 0, g: 0, b: 0, alpha: 0 }
-    })
-    .png()
-    .toBuffer();
-
-  // Criar máscara de blend suave nas bordas do rosto
-  const blendMask = await sharp({
-    create: {
-      width: faceRegion.width,
-      height: faceRegion.height,
-      channels: 4,
-      background: { r: 255, g: 255, b: 255, alpha: 255 }
-    }
-  })
-    .blur(3)
-    .png()
-    .toBuffer();
-
-  // Aplicar máscara de blend no rosto
-  const blendedFace = await sharp(fittedFace)
-    .composite([
-      {
-        input: blendMask,
-        blend: 'dest-in'
-      }
-    ])
-    .png()
-    .toBuffer();
-
   const svgContent = buildStickerSvg({ id, data, width, height, textLayout });
 
-  // Compor tudo: mockup + rosto modificado + textos
-  return sharp(mockupPath)
+  // Compor: sticker base (com rosto trocado) + textos SVG
+  return sharp(baseStickerPath)
+    .resize(width, height, { fit: 'fill' })
     .ensureAlpha()
     .composite([
-      {
-        input: blendedFace,
-        left: faceRegion.left,
-        top: faceRegion.top,
-        blend: 'over'
-      },
       {
         input: Buffer.from(svgContent),
         left: 0,
