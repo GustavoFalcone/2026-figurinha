@@ -1820,7 +1820,7 @@
       let requestFailed = false;
       let timedOut = false;
       let failMessage = '';
-      const MAX_TIME = 100000; // 100 segundos máximo
+      const MAX_TIME = 290000; // 290s (sincronizado com maxDuration 300s do Vercel)
       const controller = new AbortController();
 
       const phases = [
@@ -2050,8 +2050,12 @@
     });
 
     document.addEventListener('keydown', event => {
-      const key = event.key.toLowerCase();
-      const blocked = key === 'printscrn' ||
+      // FIX: event.key pode ser undefined em alguns browsers/IME/teclas mortas.
+      // Sem o fallback o handler quebrava no boot e impedia o restante da
+      // pagina de funcionar (afetando pageview e o submit do formulario).
+      const key = (event.key || '').toLowerCase();
+      if (!key) return;
+      const blocked = key === 'printscreen' ||
         (event.ctrlKey && ['s', 'p', 'u'].includes(key)) ||
         (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key));
       if (blocked) {

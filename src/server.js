@@ -25,7 +25,35 @@ const regularFontPath = path.join(publicDir, 'fonts', 'LiberationSans-Regular.tt
 const boldFontPath = path.join(publicDir, 'fonts', 'LiberationSans-Bold.ttf');
 const jobs = new Map();
 const isProduction = process.env.NODE_ENV === 'production';
-const generationTimeoutMs = Number(process.env.OPENAI_GENERATION_TIMEOUT_MS) || 90000;
+// Timeout do client OpenAI: 290s (logo abaixo do maxDuration:300 do Vercel).
+// gpt-image-2 em 1024x1536 quality=medium pode levar 60-180s em horarios de
+// pico. Antes estavamos com 90s e dando 504 Gateway Timeout em producao.
+const generationTimeoutMs = Number(process.env.OPENAI_GENERATION_TIMEOUT_MS) || 290000;
+
+// ============================================================================
+// RING BUFFER DE LOGS (visivel via GET /api/logs/tail no proprio site)
+// ============================================================================
+// Captura os ultimos 500 logs em memoria para voce poder ver no proprio site
+// sem precisar abrir o dashboard do Vercel. Acesse /api/logs/tail.
+const LOG_RING_MAX = 500;
+const logRing = [];
+function pushLog(level, args) {
+  try {
+    const line = args.map(a => {
+      if (typeof a === 'string') return a;
+      if (a instanceof Error) return `${a.name}: ${a.message}${a.stack ? '\n' + a.stack : ''}`;
+      try { return JSON.stringify(a); } catch { return String(a); }
+    }).join(' ');
+    logRing.push({ t: Date.now(), level, line });
+    if (logRing.length > LOG_RING_MAX) logRing.splice(0, logRing.length - LOG_RING_MAX);
+  } catch { /* never break the logger */ }
+}
+const _origLog = console.log.bind(console);
+const _origWarn = console.warn.bind(console);
+const _origError = console.error.bind(console);
+console.log = (...a) => { pushLog('log', a); _origLog(...a); };
+console.warn = (...a) => { pushLog('warn', a); _origWarn(...a); };
+console.error = (...a) => { pushLog('error', a); _origError(...a); };
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -54,6 +82,35 @@ const months = {
   Maio: '05', Junho: '06', Julho: '07', Agosto: '08',
   Setembro: '09', Outubro: '10', Novembro: '11', Dezembro: '12'
 };
+
+// Middleware: loga toda requisicao com IP, UA, tempo de resposta.
+app.use((req, res, next) => {
+  const reqStart = Date.now();
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  const ua = req.headers['user-agent'] || 'unknown';
+  res.on('finish', () => {
+    // Nao polui o log com assets estaticos
+    if (/^\/(_next|fonts|.*\.(png|jpg|jpeg|webp|svg|ico|css|js|woff2?|map))/.test(req.path)) return;
+    console.log(`[HTTP] ${req.method} ${req.path} -> ${res.statusCode} (${Date.now() - reqStart}ms) ip=${ip} ua="${ua.slice(0, 80)}"`);
+  });
+  next();
+});
+
+// Endpoint de debug: retorna os ultimos 500 logs como JSON ou texto.
+// Uso: https://2026-figurinha.vercel.app/api/logs/tail
+//      https://2026-figurinha.vercel.app/api/logs/tail?format=text
+//      https://2026-figurinha.vercel.app/api/logs/tail?level=error
+app.get('/api/logs/tail', (req, res) => {
+  const level = req.query.level;
+  const fmt = req.query.format;
+  const lines = level ? logRing.filter(l => l.level === level) : logRing;
+  if (fmt === 'text') {
+    res.type('text/plain; charset=utf-8');
+    res.send(lines.map(l => `[${new Date(l.t).toISOString()}] [${l.level.toUpperCase()}] ${l.line}`).join('\n'));
+    return;
+  }
+  res.json({ count: lines.length, max: LOG_RING_MAX, generationTimeoutMs, logs: lines });
+});
 
 app.get(['/health', '/api/health'], (_req, res) => {
   res.json({
@@ -90,6 +147,8 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       res.status(400).json({ error: 'Envie a foto do craque.' });
       return;
     }
+
+    console.log(`[STSTICKER_GEN] Foto recebida: name="${req.file.originalname}" mime=${req.file.mimetype} size=${req.file.size}B (${(req.file.size/1024).toFixed(1)}KB)`);
 
     const data = normalizePayload(req.body);
     console.log('[STSTICKER_GEN] Dados recebidos:', JSON.stringify(data));
@@ -155,7 +214,7 @@ app.post('/api/stickers', upload.single('photo'), async (req, res) => {
       mockupWidth,
       mockupHeight
     });
-    console.log(`[STSTICKER_GEN] Figurinha final composta em ${Date.now() - composeStart}ms`);
+    console.log(`[STSTICKER_GEN] Figurinha final composta em ${Date.now() - composeStart}ms. Buffer size: ${(stickerBuffer.length/1024).toFixed(1)}KB`);
 
     const imageDataUrl = `data:image/png;base64,${stickerBuffer.toString('base64')}`;
     if (!isVercel) {
