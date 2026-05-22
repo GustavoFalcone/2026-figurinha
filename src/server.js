@@ -485,6 +485,14 @@ function buildWatermarkSvg({ id, width, height }) {
   );
   const jobMark = escapeXml(id.slice(0, 8).toUpperCase());
   const wmFont = Math.round(height * 0.028);
+  const cornerMarks = buildCornerWatermarkMarks({
+    width,
+    height,
+    watermark,
+    jobMark,
+    fontSize: Math.round(height * 0.022),
+    opacity: 0.46
+  });
 
   // Linhas diagonais de marca d'agua.
   const wmLines = Array.from({ length: 22 }, (_, row) => {
@@ -495,6 +503,7 @@ function buildWatermarkSvg({ id, width, height }) {
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <g transform="rotate(-25 ${width / 2} ${height / 2})">${wmLines}</g>
+      ${cornerMarks}
       <text
         x="${width * 0.5}"
         y="${height * 0.93}"
@@ -508,6 +517,36 @@ function buildWatermarkSvg({ id, width, height }) {
       >PREVIEW • ${jobMark}</text>
     </svg>
   `;
+}
+
+function buildCornerWatermarkMarks({ width, height, watermark, jobMark, fontSize, opacity }) {
+  const label = `${watermark} - ${jobMark}`;
+  const padX = Math.round(width * 0.055);
+  const topY = Math.round(height * 0.085);
+  const bottomY = Math.round(height * 0.925);
+  const rightX = Math.round(width - padX);
+  const leftX = padX;
+  const marks = [
+    { x: leftX, y: topY, anchor: 'start', rotate: -18 },
+    { x: rightX, y: topY, anchor: 'end', rotate: 18 },
+    { x: leftX, y: bottomY, anchor: 'start', rotate: 18 },
+    { x: rightX, y: bottomY, anchor: 'end', rotate: -18 }
+  ];
+
+  return marks.map(mark => `
+      <text
+        x="${mark.x}"
+        y="${mark.y}"
+        transform="rotate(${mark.rotate} ${mark.x} ${mark.y})"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="${fontSize}px"
+        font-weight="800"
+        fill="#FFFFFF"
+        fill-opacity="${opacity}"
+        text-anchor="${mark.anchor}"
+        letter-spacing="1px"
+      >${label}</text>
+  `).join('');
 }
 
 function buildStickerSvg({ id, data, width, height, textLayout }) {
@@ -528,6 +567,14 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
     wm: Math.round(height * 0.028),
     wmSmall: Math.round(height * 0.018)
   };
+  const cornerMarks = buildCornerWatermarkMarks({
+    width,
+    height,
+    watermark,
+    jobMark,
+    fontSize: Math.round(height * 0.022),
+    opacity: 0.48
+  });
 
   // Linhas de marca d'água diagonais (com estilos inline para garantir a renderização no SVG)
   const wmLines = Array.from({ length: 18 }, (_, row) => {
@@ -539,6 +586,7 @@ function buildStickerSvg({ id, data, width, height, textLayout }) {
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <!-- Marca d'água diagonal -->
       <g transform="rotate(-25 ${width / 2} ${height / 2})">${wmLines}</g>
+      ${cornerMarks}
 
       <!-- Recria apenas as faixas originais para apagar os dados antigos antes do novo texto -->
       <rect
